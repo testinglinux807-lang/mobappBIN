@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($javaPath = \"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\"; $env:JAVA_HOME = $javaPath; $env:PATH = \"$javaPath\\\\bin;$env:PATH\"; Set-Location \"D:\\\\brin\\\\mobApp-BRIN\"; .\\\\gradlew.bat assembleDebug 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\Win11\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" devices 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\Win11\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\emulator\\\\emulator.exe\" -list-avds 2>&1)",
+      "PowerShell(Get-WindowsOptionalFeature *)",
+      "PowerShell(& \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" devices 2>&1; if \\(-not $?\\) { Write-Host \"ADB not found at default path\" })",
+      "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\"; Set-Location \"D:\\\\brin\\\\mobApp-BRIN\"; .\\\\gradlew.bat assembleDebug 2>&1)",
+      "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\"; Set-Location \"D:\\\\brin\\\\mobApp-BRIN\"; .\\\\gradlew.bat assembleDebug 2>&1 | Select-String -Pattern \"BUILD|error:|warning:|FAILED\")",
+      "PowerShell(& \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" install -r \"D:\\\\brin\\\\mobApp-BRIN\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk\" 2>&1)"
+    ]
+  }
+}
