@@ -15,7 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,68 +39,83 @@ fun NotificationsScreen() {
     val unreadCount = MockData.notifications.count { !it.isRead }
 
     Column(modifier = Modifier.fillMaxSize().background(AppBackground)) {
-        Surface(color = CardBg) {
-            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-                Row(
-                    modifier              = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment     = Alignment.CenterVertically
-                ) {
-                    Text("Notifikasi", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    if (unreadCount > 0) {
-                        Surface(shape = RoundedCornerShape(12.dp), color = StatusCritical) {
-                            Text(
-                                "$unreadCount baru",
-                                fontSize   = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color      = Color.White,
-                                modifier   = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier              = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(SearchBg)
-                        .padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    tabs.forEachIndexed { index, label ->
-                        val isActive = selectedTab == index
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isActive) GreenPrimary else Color.Transparent)
-                                .clickable { selectedTab = index }
-                                .padding(vertical = 7.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text       = label,
-                                fontSize   = 12.sp,
-                                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-                                color      = if (isActive) Color.White else TextSecondary
-                            )
-                        }
+
+        // ── Green accent header ──────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(GreenDark)
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(top = 20.dp, bottom = 20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Notifikasi",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                if (unreadCount > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFFF5252)
+                    ) {
+                        Text(
+                            "$unreadCount baru",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
                     }
                 }
             }
         }
 
+        // ── Tab filter ───────────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CardBg)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            tabs.forEachIndexed { index, label ->
+                val isActive = selectedTab == index
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (isActive) GreenPrimary else AppBackground
+                ) {
+                    Text(
+                        text = label,
+                        fontSize = 12.sp,
+                        color = if (isActive) Color.White else TextSecondary,
+                        fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+                        modifier = Modifier
+                            .clickable { selectedTab = index }
+                            .padding(horizontal = 14.dp, vertical = 7.dp)
+                    )
+                }
+            }
+        }
+
+        // ── Notif list ───────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(vertical = 12.dp, horizontal = 16.dp)
+                .padding(16.dp)
                 .padding(bottom = 80.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             if (filtered.isEmpty()) {
                 Box(
-                    modifier         = Modifier.fillMaxWidth().padding(top = 60.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 60.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("Tidak ada notifikasi", color = TextHint, fontSize = 14.sp)
@@ -115,43 +129,55 @@ fun NotificationsScreen() {
 
 @Composable
 private fun NotifCard(item: NotificationItem) {
-    val iconColor: Color
-    val bgColor: Color
-    val icon: ImageVector
-    when (item.type) {
-        BinStatus.CRITICAL    -> { iconColor = StatusCritical; bgColor = StatusCriticalBg; icon = Icons.Default.Warning }
-        BinStatus.NEED_PICKUP -> { iconColor = StatusWarning;  bgColor = StatusWarningBg;  icon = Icons.Default.Info }
-        BinStatus.NORMAL      -> { iconColor = StatusNormal;   bgColor = StatusNormalBg;   icon = Icons.Default.CheckCircle }
+    val accentColor = when (item.type) {
+        BinStatus.CRITICAL    -> StatusCritical
+        BinStatus.NEED_PICKUP -> StatusWarning
+        BinStatus.NORMAL      -> StatusNormal
     }
 
-    Surface(
-        shape    = RoundedCornerShape(12.dp),
-        color    = CardBg,
-        modifier = Modifier.fillMaxWidth()
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(CardBg)
     ) {
-        Row(
-            modifier          = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+            // Left border hanya untuk yang belum dibaca
             Box(
-                modifier = Modifier.size(38.dp).clip(CircleShape).background(bgColor),
-                contentAlignment = Alignment.Center
+                modifier = Modifier
+                    .width(4.dp)
+                    .fillMaxHeight()
+                    .background(if (!item.isRead) accentColor else Color.Transparent)
+            )
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.Top
             ) {
-                Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(item.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                    if (!item.isRead) {
-                        Spacer(Modifier.width(6.dp))
-                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(StatusCritical))
-                    }
+                Box(
+                    modifier = Modifier
+                        .padding(top = 3.dp)
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(accentColor)
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        item.title,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        item.binId,
+                        fontSize = 11.sp,
+                        color = accentColor,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(item.message, fontSize = 12.sp, color = TextSecondary)
                 }
-                Text(item.binId, fontSize = 11.sp, color = iconColor, fontWeight = FontWeight.Medium)
-                Text(item.message, fontSize = 12.sp, color = TextSecondary)
+                Text(item.time, fontSize = 10.sp, color = TextHint)
             }
-            Text(item.time, fontSize = 10.sp, color = TextHint)
         }
     }
 }

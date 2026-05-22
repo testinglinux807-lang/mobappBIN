@@ -42,26 +42,108 @@ fun DetailBinScreen(binId: String, onBack: () -> Unit) {
             .fillMaxSize()
             .background(AppBackground)
     ) {
-        Surface(color = CardBg) {
+        // ── Green accent header ──────────────────────────────────────────
+        val sColor = if (bin != null) statusColor(bin.status) else GreenPrimary
+        val sLabel = if (bin != null) statusLabel(bin.status) else ""
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(GreenDark)
+                .statusBarsPadding()
+                .padding(bottom = 24.dp)
+        ) {
+            // Top bar: back + overflow
             Row(
-                modifier          = Modifier
+                modifier = Modifier
                     .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = TextPrimary)
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Kembali",
+                        tint = Color.White
+                    )
                 }
-                Text(
-                    "Detail Bin",
-                    fontSize   = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color      = TextPrimary,
-                    modifier   = Modifier.weight(1f)
-                )
-                IconButton(onClick = { }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = TextSecondary)
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = {}) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = "Menu",
+                        tint = Color.White.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            if (bin != null) {
+                // Bin identity
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column {
+                        Text(
+                            text = bin.id,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "${bin.location}, ${bin.area}",
+                            fontSize = 13.sp,
+                            color = Color.White.copy(alpha = 0.65f)
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = sColor.copy(alpha = 0.25f)
+                    ) {
+                        Text(
+                            text = sLabel,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // Capacity bar
+                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Kapasitas",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                        Text(
+                            text = "${bin.capacity}%",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { bin.capacity / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.2f)
+                    )
                 }
             }
         }
@@ -73,128 +155,104 @@ fun DetailBinScreen(binId: String, onBack: () -> Unit) {
             return
         }
 
-        val sColor = statusColor(bin.status)
-        val sLabel = statusLabel(bin.status)
-
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 80.dp)
         ) {
-            Spacer(Modifier.height(16.dp))
-
-            // Bin identity card
-            Surface(
-                shape    = RoundedCornerShape(14.dp),
-                color    = CardBg,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier              = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment     = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(sColor.copy(alpha = 0.12f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = if (bin.status == BinStatus.CRITICAL)
-                                        Icons.Default.Warning else Icons.Default.DeleteOutline,
-                                    contentDescription = null,
-                                    tint = sColor,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text(bin.id, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                                Text(bin.location, fontSize = 13.sp, color = TextSecondary)
-                            }
-                        }
-                        Surface(shape = RoundedCornerShape(6.dp), color = sColor.copy(alpha = 0.12f)) {
+            // Alert banner if critical
+            if (bin.alertText.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(CardBg)
+                ) {
+                    Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                        Box(
+                            modifier = Modifier
+                                .width(4.dp)
+                                .fillMaxHeight()
+                                .background(sColor)
+                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = sColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
                             Text(
-                                sLabel,
-                                fontSize   = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color      = sColor,
-                                modifier   = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                "Kapasitas ${bin.capacity}% · ${bin.alertText}",
+                                fontSize = 13.sp,
+                                color = sColor,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
-
-                    if (bin.alertText.isNotEmpty()) {
-                        Spacer(Modifier.height(8.dp))
-                        Surface(shape = RoundedCornerShape(8.dp), color = sColor.copy(alpha = 0.08f)) {
-                            Row(
-                                modifier          = Modifier.fillMaxWidth().padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Warning, contentDescription = null,
-                                    tint = sColor, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Kapasitas ${bin.capacity}% · ${bin.alertText}",
-                                    fontSize = 12.sp, color = sColor, fontWeight = FontWeight.Medium)
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    // Capacity bar
-                    Row(
-                        modifier              = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Kapasitas", fontSize = 14.sp, color = TextSecondary)
-                        Text("${bin.capacity}%", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = sColor)
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    LinearProgressIndicator(
-                        progress   = { bin.capacity / 100f },
-                        modifier   = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)),
-                        color      = sColor,
-                        trackColor = DividerColor
-                    )
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
 
             // Informasi Bin
-            InfoSection(bin)
+            Text(
+                "Informasi Bin",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = CardBg,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            ) {
+                Column {
+                    InfoRow(Icons.Default.LocationOn, "Lokasi",          "${bin.location}, ${bin.area}")
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                    InfoRow(Icons.Default.Schedule,   "Terakhir Update", bin.lastUpdate)
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                    InfoRow(Icons.Default.Warning,    "Status",          sLabel, valueColor = sColor)
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                    InfoRow(Icons.Default.BatteryFull,"Baterai",         "${bin.battery}%")
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                    InfoRow(Icons.Default.Thermostat, "Suhu",            "${bin.temperature}°C")
+                }
+            }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
 
             // Aksi Cepat
             Text(
                 "Aksi Cepat",
-                fontSize   = 15.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                color      = TextPrimary,
-                modifier   = Modifier.padding(horizontal = 20.dp)
+                color = TextPrimary,
+                modifier = Modifier.padding(horizontal = 20.dp)
             )
-            Spacer(Modifier.height(10.dp))
-
+            Spacer(Modifier.height(8.dp))
             Surface(
-                shape    = RoundedCornerShape(14.dp),
-                color    = CardBg,
+                shape = RoundedCornerShape(12.dp),
+                color = CardBg,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
             ) {
                 Column {
-                    QuickAction(Icons.Default.QrCode2,       "Generate QR Petugas", GreenPrimary, filled = true) { showQrDialog = true }
-                    HorizontalDivider(color = DividerColor)
-                    QuickAction(Icons.Default.CheckCircle,   "Pickup Selesai",      TextSecondary) { }
-                    HorizontalDivider(color = DividerColor)
-                    QuickAction(Icons.Default.Warning,       "Laporkan Masalah",    TextSecondary) { }
-                    HorizontalDivider(color = DividerColor)
-                    QuickAction(Icons.Default.Navigation,    "Navigasi ke Lokasi",  TextSecondary) { }
+                    FlatAction("Generate QR Petugas", GreenPrimary, bold = true) { showQrDialog = true }
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                    FlatAction("Pickup Selesai", TextPrimary) { }
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                    FlatAction("Laporkan Masalah", TextPrimary) { }
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                    FlatAction("Navigasi ke Lokasi", TextPrimary) { }
                 }
             }
         }
@@ -206,44 +264,47 @@ fun DetailBinScreen(binId: String, onBack: () -> Unit) {
 }
 
 @Composable
-private fun InfoSection(bin: BinData) {
-    Text(
-        "Informasi Bin",
-        fontSize   = 15.sp,
-        fontWeight = FontWeight.SemiBold,
-        color      = TextPrimary,
-        modifier   = Modifier.padding(horizontal = 20.dp)
-    )
-    Spacer(Modifier.height(10.dp))
-    Surface(
-        shape    = RoundedCornerShape(14.dp),
-        color    = CardBg,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+private fun InfoRow(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    valueColor: Color = TextPrimary
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.padding(4.dp)) {
-            InfoRow(Icons.Default.LocationOn, "Lokasi",          "${bin.location}, ${bin.area}")
-            HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 12.dp))
-            InfoRow(Icons.Default.Schedule,   "Terakhir Update", bin.lastUpdate)
-            HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 12.dp))
-            InfoRow(Icons.Default.Warning,    "Status",          statusLabel(bin.status))
-            HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 12.dp))
-            InfoRow(Icons.Default.BatteryFull,"Baterai",         "${bin.battery}%")
-            HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 12.dp))
-            InfoRow(Icons.Default.Thermostat, "Suhu",            "${bin.temperature}°C")
-        }
+        Icon(icon, contentDescription = null, tint = TextHint, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(label, fontSize = 13.sp, color = TextSecondary, modifier = Modifier.weight(1f))
+        Text(value, fontSize = 13.sp, color = valueColor, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
-private fun InfoRow(icon: ImageVector, label: String, value: String) {
+private fun FlatAction(label: String, color: Color, bold: Boolean = false, onClick: () -> Unit) {
     Row(
-        modifier          = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = TextHint, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(12.dp))
-        Text(label, fontSize = 13.sp, color = TextSecondary, modifier = Modifier.weight(1f))
-        Text(value, fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
+            color = color,
+            modifier = Modifier.weight(1f)
+        )
+        Icon(
+            Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = TextHint,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }
 
@@ -254,18 +315,15 @@ private fun QrDialog(bin: BinData, onDismiss: () -> Unit) {
     val sColor    = statusColor(bin.status)
 
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = CardBg
-        ) {
+        Surface(shape = RoundedCornerShape(20.dp), color = CardBg) {
             Column(
-                modifier            = Modifier.padding(24.dp),
+                modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
-                    modifier              = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment     = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
                         Text("QR Code Petugas", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
@@ -278,21 +336,16 @@ private fun QrDialog(bin: BinData, onDismiss: () -> Unit) {
 
                 Spacer(Modifier.height(16.dp))
 
-                // QR code image
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White
-                ) {
+                Surface(shape = RoundedCornerShape(12.dp), color = Color.White) {
                     Image(
-                        bitmap      = qrBitmap.asImageBitmap(),
+                        bitmap = qrBitmap.asImageBitmap(),
                         contentDescription = "QR Code ${bin.id}",
-                        modifier    = Modifier.size(200.dp).padding(8.dp)
+                        modifier = Modifier.size(200.dp).padding(8.dp)
                     )
                 }
 
                 Spacer(Modifier.height(14.dp))
 
-                // Info
                 Surface(shape = RoundedCornerShape(10.dp), color = AppBackground) {
                     Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
                         QrInfoRow(Icons.Default.LocationOn, bin.location)
@@ -301,12 +354,12 @@ private fun QrDialog(bin: BinData, onDismiss: () -> Unit) {
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
 
                 Text(
                     "Tunjukkan QR ini ke petugas. Setelah scan,\npetugas akan diarahkan ke lokasi bin.",
-                    fontSize  = 11.sp,
-                    color     = TextHint,
+                    fontSize = 11.sp,
+                    color = TextHint,
                     textAlign = TextAlign.Center,
                     lineHeight = 16.sp
                 )
@@ -314,13 +367,11 @@ private fun QrDialog(bin: BinData, onDismiss: () -> Unit) {
                 Spacer(Modifier.height(16.dp))
 
                 Button(
-                    onClick  = onDismiss,
-                    colors   = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
-                    shape    = RoundedCornerShape(12.dp),
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth().height(46.dp)
                 ) {
-                    Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
                     Text("Selesai", fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -331,7 +382,7 @@ private fun QrDialog(bin: BinData, onDismiss: () -> Unit) {
 @Composable
 private fun QrInfoRow(icon: ImageVector, text: String, color: Color = TextSecondary) {
     Row(
-        modifier          = Modifier.padding(vertical = 3.dp),
+        modifier = Modifier.padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
@@ -341,52 +392,13 @@ private fun QrInfoRow(icon: ImageVector, text: String, color: Color = TextSecond
 }
 
 private fun generateQrBitmap(content: String, size: Int = 512): Bitmap {
-    val hints    = mapOf(EncodeHintType.MARGIN to 1)
-    val matrix   = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size, hints)
-    val bitmap   = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val hints  = mapOf(EncodeHintType.MARGIN to 1)
+    val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size, hints)
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     for (x in 0 until size) {
         for (y in 0 until size) {
             bitmap.setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
         }
     }
     return bitmap
-}
-
-@Composable
-private fun QuickAction(
-    icon: ImageVector,
-    label: String,
-    color: Color,
-    filled: Boolean = false,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier          = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (filled) GreenPrimary else SearchBg),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, contentDescription = null,
-                tint = if (filled) Color.White else color,
-                modifier = Modifier.size(18.dp))
-        }
-        Spacer(Modifier.width(12.dp))
-        Text(
-            label,
-            fontSize   = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color      = if (filled) GreenPrimary else TextPrimary,
-            modifier   = Modifier.weight(1f)
-        )
-        Icon(Icons.Default.ChevronRight, contentDescription = null,
-            tint = TextHint, modifier = Modifier.size(18.dp))
-    }
 }

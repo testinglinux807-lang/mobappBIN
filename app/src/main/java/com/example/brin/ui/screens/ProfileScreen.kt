@@ -1,6 +1,7 @@
 package com.example.brin.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,85 +24,138 @@ import com.example.brin.ui.theme.*
 @Composable
 fun ProfileScreen() {
     Column(
-        modifier             = Modifier.fillMaxSize().background(AppBackground),
-        horizontalAlignment  = Alignment.CenterHorizontally
+        modifier = Modifier.fillMaxSize().background(AppBackground)
     ) {
-        Surface(color = CardBg, modifier = Modifier.fillMaxWidth()) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(24.dp)
+        // ── Green accent header ──────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(GreenDark)
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(top = 24.dp, bottom = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Avatar
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
             ) {
+                Text(
+                    text = "A",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Text("Andrian", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(
+                "Administrator · Sistem BRIN",
+                fontSize = 13.sp,
+                color = Color.White.copy(alpha = 0.65f)
+            )
+
+            Spacer(Modifier.height(24.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+            Spacer(Modifier.height(20.dp))
+
+            // Stat row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ProfileStat("248", "Total Bin")
                 Box(
                     modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(GreenSurface),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Person, contentDescription = null,
-                        tint = GreenPrimary, modifier = Modifier.size(48.dp))
-                }
-                Spacer(Modifier.height(12.dp))
-                Text("Andrian", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Text("Administrator · Sistem BRIN", fontSize = 13.sp, color = TextSecondary)
-                Spacer(Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    StatColumn("248", "Total Bin")
-                    StatColumn("12", "Petugas Aktif")
-                    StatColumn("6", "Zona Aktif")
-                }
+                        .width(1.dp).height(32.dp)
+                        .background(Color.White.copy(alpha = 0.18f))
+                )
+                ProfileStat("12", "Petugas Aktif")
+                Box(
+                    modifier = Modifier
+                        .width(1.dp).height(32.dp)
+                        .background(Color.White.copy(alpha = 0.18f))
+                )
+                ProfileStat("6", "Zona Aktif")
             }
         }
 
         Spacer(Modifier.height(16.dp))
 
+        // ── Menu items ───────────────────────────────────────────────────
         Surface(
-            shape    = RoundedCornerShape(14.dp),
-            color    = CardBg,
+            shape = RoundedCornerShape(12.dp),
+            color = CardBg,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
         ) {
-            Column(modifier = Modifier.padding(4.dp)) {
-                ProfileMenuItem(Icons.Default.Notifications, "Notifikasi")
-                HorizontalDivider(color = DividerColor)
-                ProfileMenuItem(Icons.Default.BarChart, "Laporan Aktivitas")
-                HorizontalDivider(color = DividerColor)
-                ProfileMenuItem(Icons.Default.Settings, "Pengaturan")
-                HorizontalDivider(color = DividerColor)
-                ProfileMenuItem(Icons.AutoMirrored.Filled.Help, "Bantuan")
+            Column {
+                ProfileMenuItem(Icons.Default.Notifications,           "Notifikasi")
+                HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                ProfileMenuItem(Icons.Default.BarChart,                "Laporan Aktivitas")
+                HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                ProfileMenuItem(Icons.Default.Settings,                "Pengaturan")
+                HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                ProfileMenuItem(Icons.AutoMirrored.Filled.Help,        "Bantuan")
             }
         }
 
         Spacer(Modifier.height(16.dp))
 
-        OutlinedButton(
-            onClick  = { },
-            shape    = RoundedCornerShape(12.dp),
-            colors   = ButtonDefaults.outlinedButtonColors(contentColor = StatusCritical),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(48.dp)
+        // ── Logout ───────────────────────────────────────────────────────
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = CardBg,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
         ) {
-            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null,
-                tint = StatusCritical, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Keluar", color = StatusCritical, fontWeight = FontWeight.SemiBold)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Logout,
+                    contentDescription = null,
+                    tint = StatusCritical,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "Keluar",
+                    fontSize = 14.sp,
+                    color = StatusCritical,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun StatColumn(value: String, label: String) {
+private fun ProfileStat(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = GreenPrimary)
-        Text(label, fontSize = 10.sp, color = TextSecondary)
+        Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(label, fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
     }
 }
 
 @Composable
-private fun ProfileMenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String) {
+private fun ProfileMenuItem(icon: ImageVector, label: String) {
     Row(
-        modifier          = Modifier.fillMaxWidth().padding(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(12.dp))
         Text(label, fontSize = 14.sp, color = TextPrimary, modifier = Modifier.weight(1f))
         Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextHint, modifier = Modifier.size(18.dp))

@@ -30,176 +30,179 @@ fun SettingsScreen(onLogout: () -> Unit = {}) {
     var autoRefresh   by remember { mutableStateOf(true) }
 
     Column(
-        modifier             = Modifier.fillMaxSize().background(AppBackground),
-        horizontalAlignment  = Alignment.CenterHorizontally
+        modifier = Modifier.fillMaxSize().background(AppBackground)
     ) {
-        Surface(color = CardBg, modifier = Modifier.fillMaxWidth()) {
+        // ── Green accent header ──────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(GreenDark)
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(top = 20.dp, bottom = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Avatar + info
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("A", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+            Spacer(Modifier.height(10.dp))
+            Text("Andrian", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Text(
-                "Pengaturan",
-                fontSize   = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color      = TextPrimary,
-                modifier   = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
+                "andrianadiwahyono01@gmail.com",
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.55f)
             )
+
+            Spacer(Modifier.height(22.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+            Spacer(Modifier.height(18.dp))
+
+            // Stat row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SettingStat("248", "Total Bin")
+                Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color.White.copy(alpha = 0.18f)))
+                SettingStat("12", "Petugas")
+                Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color.White.copy(alpha = 0.18f)))
+                SettingStat("6", "Zona Aktif")
+                Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color.White.copy(alpha = 0.18f)))
+                SettingStat("99%", "Uptime")
+            }
         }
 
+        // ── Scrollable content ───────────────────────────────────────────
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 80.dp)
         ) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
 
-            // Admin profile card
+            SectionLabel("Notifikasi")
             Surface(
-                shape    = RoundedCornerShape(14.dp),
-                color    = CardBg,
+                shape = RoundedCornerShape(12.dp),
+                color = CardBg,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
             ) {
-                Row(
-                    modifier          = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier.size(56.dp).clip(CircleShape).background(GreenSurface),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.AdminPanelSettings, contentDescription = null,
-                            tint = GreenPrimary, modifier = Modifier.size(32.dp))
-                    }
-                    Spacer(Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Andrian", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                        Text("Administrator · Sistem BRIN", fontSize = 13.sp, color = TextSecondary)
-                        Text("andrianadiwahyono01@gmail.com", fontSize = 11.sp, color = TextHint)
-                    }
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextHint)
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Stats row
-            Surface(
-                shape    = RoundedCornerShape(14.dp),
-                color    = CardBg,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-            ) {
-                Row(
-                    modifier              = Modifier.fillMaxWidth().padding(vertical = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    AdminStatCol("248",  "Total Bin")
-                    VerticalDivider(Modifier.height(36.dp))
-                    AdminStatCol("12",   "Petugas")
-                    VerticalDivider(Modifier.height(36.dp))
-                    AdminStatCol("6",    "Zona Aktif")
-                    VerticalDivider(Modifier.height(36.dp))
-                    AdminStatCol("99%",  "Uptime")
+                Column {
+                    ToggleRow(Icons.Default.Notifications, "Notifikasi Push",  notifEnabled)  { notifEnabled  = it }
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                    ToggleRow(Icons.Default.Warning,       "Alert Bin Kritis", criticalAlert) { criticalAlert = it }
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                    ToggleRow(Icons.Default.Refresh,       "Auto Refresh Data",autoRefresh)   { autoRefresh   = it }
                 }
             }
 
             Spacer(Modifier.height(20.dp))
 
-            SectionLabel("Notifikasi")
-            Surface(
-                shape    = RoundedCornerShape(14.dp),
-                color    = CardBg,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-            ) {
-                Column(modifier = Modifier.padding(4.dp)) {
-                    ToggleRow(Icons.Default.Notifications, "Notifikasi Push", notifEnabled) { notifEnabled = it }
-                    HorizontalDivider(color = DividerColor)
-                    ToggleRow(Icons.Default.Warning, "Alert Bin Kritis", criticalAlert) { criticalAlert = it }
-                    HorizontalDivider(color = DividerColor)
-                    ToggleRow(Icons.Default.Refresh, "Auto Refresh Data", autoRefresh) { autoRefresh = it }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
             SectionLabel("Manajemen Sistem")
             Surface(
-                shape    = RoundedCornerShape(14.dp),
-                color    = CardBg,
+                shape = RoundedCornerShape(12.dp),
+                color = CardBg,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
             ) {
-                Column(modifier = Modifier.padding(4.dp)) {
-                    MenuRow(Icons.Default.People,      "Manajemen Petugas")
-                    HorizontalDivider(color = DividerColor)
-                    MenuRow(Icons.Default.LocationOn,  "Manajemen Zona")
-                    HorizontalDivider(color = DividerColor)
-                    MenuRow(Icons.Default.DeleteOutline,"Manajemen Bin")
-                    HorizontalDivider(color = DividerColor)
-                    MenuRow(Icons.Default.Download,    "Export Laporan")
+                Column {
+                    MenuRow(Icons.Default.People,         "Manajemen Petugas")
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                    MenuRow(Icons.Default.LocationOn,     "Manajemen Zona")
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                    MenuRow(Icons.Default.DeleteOutline,  "Manajemen Bin")
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                    MenuRow(Icons.Default.Download,       "Export Laporan")
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
 
             SectionLabel("Lainnya")
             Surface(
-                shape    = RoundedCornerShape(14.dp),
-                color    = CardBg,
+                shape = RoundedCornerShape(12.dp),
+                color = CardBg,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
             ) {
-                Column(modifier = Modifier.padding(4.dp)) {
+                Column {
                     MenuRow(Icons.AutoMirrored.Filled.Help, "Bantuan & Dukungan")
-                    HorizontalDivider(color = DividerColor)
-                    MenuRow(Icons.Default.Info,             "Tentang Aplikasi")
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                    MenuRow(Icons.Default.Info,              "Tentang Aplikasi")
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
 
-            OutlinedButton(
-                onClick  = onLogout,
-                shape    = RoundedCornerShape(12.dp),
-                colors   = ButtonDefaults.outlinedButtonColors(contentColor = StatusCritical),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(48.dp)
+            // Logout
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = CardBg,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
             ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null,
-                    modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Keluar", fontWeight = FontWeight.SemiBold)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onLogout)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Logout,
+                        contentDescription = null,
+                        tint = StatusCritical,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "Keluar",
+                        fontSize = 14.sp,
+                        color = StatusCritical,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
-
-            Spacer(Modifier.height(8.dp))
         }
     }
 }
 
 @Composable
-private fun AdminStatCol(value: String, label: String) {
+private fun SettingStat(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-        Text(label, fontSize = 11.sp, color = TextSecondary)
+        Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(label, fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
     }
 }
 
 @Composable
 private fun SectionLabel(text: String) {
     Text(
-        text     = text,
-        fontSize = 13.sp,
-        color    = TextHint,
+        text = text,
+        fontSize = 12.sp,
+        color = TextHint,
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp)
     )
 }
 
 @Composable
 private fun MenuRow(icon: ImageVector, label: String) {
     Row(
-        modifier          = Modifier
+        modifier = Modifier
             .fillMaxWidth()
             .clickable { }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(14.dp))
+        Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(12.dp))
         Text(label, fontSize = 14.sp, color = TextPrimary, modifier = Modifier.weight(1f))
         Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextHint, modifier = Modifier.size(18.dp))
     }
@@ -208,18 +211,21 @@ private fun MenuRow(icon: ImageVector, label: String) {
 @Composable
 private fun ToggleRow(icon: ImageVector, label: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
     Row(
-        modifier          = Modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(14.dp))
+        Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(12.dp))
         Text(label, fontSize = 14.sp, color = TextPrimary, modifier = Modifier.weight(1f))
         Switch(
-            checked         = checked,
+            checked = checked,
             onCheckedChange = onToggle,
-            colors          = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = GreenPrimary)
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = GreenPrimary
+            )
         )
     }
 }

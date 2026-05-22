@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -122,55 +124,88 @@ fun ScheduleScreen() {
 
     Column(modifier = Modifier.fillMaxSize().background(AppBackground)) {
 
-        // Header
-        Surface(color = CardBg) {
-            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-                Row(
-                    modifier              = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment     = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Jadwal Petugas", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                        Text(bulan, fontSize = 13.sp, color = TextSecondary)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(GreenSurface)
-                            .clickable { showSheet = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Tambah jadwal",
-                            tint = GreenPrimary, modifier = Modifier.size(22.dp))
-                    }
+        // ── Green accent header ──────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(GreenDark)
+                .statusBarsPadding()
+                .padding(bottom = 20.dp)
+        ) {
+            // Title row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        "Jadwal Petugas",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(bulan, fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f))
                 }
+                IconButton(onClick = { showSheet = true }) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Tambah jadwal",
+                        tint = Color.White
+                    )
+                }
+            }
 
-                Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-                LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    itemsIndexed(days) { index, day ->
-                        val isSelected = selectedDate == index
-                        val isToday    = index == todayIndex
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
+            // Calendar strip (putih on dark)
+            LazyRow(
+                state = listState,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp)
+            ) {
+                itemsIndexed(days) { index, day ->
+                    val isSelected = selectedDate == index
+                    val isToday    = index == todayIndex
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                if (isSelected) Color.White.copy(alpha = 0.18f)
+                                else Color.Transparent
+                            )
+                            .clickable { selectedDate = index }
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            day.hari,
+                            fontSize = 11.sp,
+                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.45f)
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "${day.tanggal}",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) GreenPrimary else Color.Transparent)
-                                .clickable { selectedDate = index }
-                                .padding(horizontal = 10.dp, vertical = 8.dp)
-                        ) {
-                            Text(day.hari, fontSize = 11.sp,
-                                color = if (isSelected) Color.White.copy(alpha = 0.8f) else TextHint)
-                            Spacer(Modifier.height(4.dp))
-                            Text("${day.tanggal}", fontSize = 16.sp, fontWeight = FontWeight.Bold,
-                                color = if (isSelected) Color.White else TextPrimary)
-                            if (isToday && !isSelected) {
-                                Spacer(Modifier.height(2.dp))
-                                Box(Modifier.size(4.dp).clip(CircleShape).background(GreenPrimary))
-                            }
-                        }
+                                .size(4.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    when {
+                                        isSelected -> Color.White
+                                        isToday    -> Color.White.copy(alpha = 0.6f)
+                                        else       -> Color.Transparent
+                                    }
+                                )
+                        )
                     }
                 }
             }
@@ -569,32 +604,31 @@ private fun JadwalCard(jadwal: JadwalItem, petugas: Petugas, onEdit: () -> Unit,
                         Text(petugas.zona, fontSize = 12.sp, color = TextSecondary)
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Surface(shape = RoundedCornerShape(8.dp), color = statusColor.copy(alpha = 0.12f)) {
-                        Text(statusLabel, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = statusColor,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                        Text(
+                            statusLabel,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = statusColor,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(30.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(GreenSurface)
-                            .clickable { onEdit() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit jadwal",
-                            tint = GreenPrimary, modifier = Modifier.size(15.dp))
+                    IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit jadwal",
+                            tint = GreenMedium,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(30.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(StatusCritical.copy(alpha = 0.10f))
-                            .clickable { showConfirm = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Hapus jadwal",
-                            tint = StatusCritical, modifier = Modifier.size(15.dp))
+                    IconButton(onClick = { showConfirm = true }, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Hapus jadwal",
+                            tint = StatusCritical,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }
