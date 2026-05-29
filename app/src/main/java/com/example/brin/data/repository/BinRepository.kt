@@ -1,0 +1,121 @@
+package com.example.brin.data.repository
+
+import com.example.brin.data.api.ApiBin
+import com.example.brin.data.api.ApiBinDetail
+import com.example.brin.data.api.BinLatest
+import com.example.brin.data.api.CreateBinRequest
+import com.example.brin.data.api.OptimalRouteData
+import com.example.brin.data.api.RetrofitClient
+import com.example.brin.data.api.ThresholdRequest
+import com.example.brin.data.api.UpdateBinRequest
+import com.example.brin.data.BinData
+import com.example.brin.data.BinStatus
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+object BinRepository {
+
+    suspend fun getBins(): Result<List<BinData>> = runCatching {
+        val resp = RetrofitClient.api.getBins()
+        if (!resp.success) error(resp.message)
+        resp.data.orEmpty().map { it.toBinData() }
+    }
+
+    suspend fun getBinById(id: String): Result<BinData> = runCatching {
+        val resp = RetrofitClient.api.getBinById(id)
+        if (!resp.success || resp.data == null) error(resp.message)
+        resp.data.toBinData()
+    }
+
+    suspend fun getOptimalRoute(lat: Double, lng: Double): Result<OptimalRouteData> = runCatching {
+        val resp = RetrofitClient.api.getOptimalRoute(lat, lng)
+        if (!resp.success) error(resp.message)
+        resp.data ?: OptimalRouteData(emptyList(), null, null, resp.message)
+    }
+
+    suspend fun createBin(
+        nodeId: String, location: String, lat: Double, lng: Double, areaId: String?
+    ): Result<BinData> = runCatching {
+        val resp = RetrofitClient.api.createBin(CreateBinRequest(nodeId, location, lat, lng, areaId))
+        if (!resp.success || resp.data == null) error(resp.message)
+        resp.data.toBinData()
+    }
+
+    suspend fun updateBin(
+        id: String, nodeId: String?, location: String?, lat: Double?, lng: Double?, areaId: String?
+    ): Result<BinData> = runCatching {
+        val resp = RetrofitClient.api.updateBin(id, UpdateBinRequest(nodeId, location, lat, lng, areaId))
+        if (!resp.success || resp.data == null) error(resp.message)
+        resp.data.toBinData()
+    }
+
+    suspend fun setThreshold(
+        id: String, weight: Double?, volume: Int?, gas: Double?, battery: Int?
+    ): Result<Unit> = runCatching {
+        val resp = RetrofitClient.api.setThreshold(id, ThresholdRequest(weight, volume, gas, battery))
+        if (!resp.success) error(resp.message)
+    }
+
+    suspend fun deleteBin(id: String): Result<Unit> = runCatching {
+        val resp = RetrofitClient.api.deleteBin(id)
+        if (!resp.success) error(resp.message)
+    }
+}
+
+// ── Mapping helpers ────────────────────────────────────────────────────────────
+
+fun ApiBin.toBinData(): BinData {
+    val vol = latest?.volume ?: 0
+    return BinData(
+        id         = id,
+        nodeId     = nodeId,
+        location   = location,
+        area       = areaId ?: "",
+        capacity   = vol,
+        status     = vol.toStatus(),
+        lastUpdate = latest?.timestamp?.toRelativeTime() ?: "Tidak diketahui",
+        battery    = latest?.battery ?: 0,
+        gas        = latest?.gas ?: 0.0,
+        lat        = lat,
+        lng        = lng,
+        alertText  = if (vol >= 90) "Segera dikosongkan" else if (vol >= 70) "Perlu dikosongkan" else ""
+    )
+}
+
+fun ApiBinDetail.toBinData(): BinData {
+    val vol = latest?.volume ?: 0
+    return BinData(
+        id         = id,
+        nodeId     = nodeId,
+        location   = location,
+        area       = areaId ?: "",
+        capacity   = vol,
+        status     = vol.toStatus(),
+        lastUpdate = latest?.timestamp?.toRelativeTime() ?: "Tidak diketahui",
+        battery    = latest?.battery ?: 0,
+        gas        = latest?.gas ?: 0.0,
+        lat        = lat,
+        lng        = lng,
+        alertText  = if (vol >= 90) "Segera dikosongkan" else if (vol >= 70) "Perlu dikosongkan" else ""
+    )
+}
+
+private fun Int.toStatus() = when {
+    this >= 90 -> BinStatus.CRITICAL
+    this >= 70 -> BinStatus.NEED_PICKUP
+    else       -> BinStatus.NORMAL
+}
+
+private fun String.toRelativeTime(): String = runCatching {
+    val instant = Instant.parse(this)
+    val now     = Instant.now()
+    val diff    = now.epochSecond - instant.epochSecond
+    when {
+        diff < 60       -> "Baru saja"
+        diff < 3600     -> "${diff / 60} menit yang lalu"
+        diff < 86400    -> "${diff / 3600} jam yang lalu"
+        else            -> "${diff / 86400} hari yang lalu"
+    }
+}.getOrDefault(this)

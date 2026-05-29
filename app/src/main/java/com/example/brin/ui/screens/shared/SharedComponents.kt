@@ -1,4 +1,4 @@
-package com.example.brin.ui.screens
+package com.example.brin.ui.screens.shared
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
