@@ -29,7 +29,6 @@ import kotlinx.coroutines.launch
 import com.example.brin.ui.screens.admin.HomeScreen
 import com.example.brin.ui.screens.admin.MapScreen
 import com.example.brin.ui.screens.admin.NotificationsScreen
-import com.example.brin.ui.screens.admin.ScheduleScreen
 import com.example.brin.ui.screens.admin.SettingsScreen
 import com.example.brin.ui.screens.admin.AreasScreen
 import com.example.brin.ui.screens.admin.CreateEditBinScreen
@@ -43,7 +42,6 @@ sealed class AdminScreen(val route: String) {
     object Map           : AdminScreen("admin_map")
     object Notifications : AdminScreen("admin_notifications")
     object Analytics     : AdminScreen("admin_analytics")
-    object Schedule      : AdminScreen("admin_schedule")
     object Settings      : AdminScreen("admin_settings")
     object DetailBin     : AdminScreen("admin_detail_bin/{binId}") {
         fun go(binId: String) = "admin_detail_bin/$binId"
@@ -67,7 +65,6 @@ val adminBottomNavRoutes = listOf(
     AdminScreen.Home.route,
     AdminScreen.Map.route,
     AdminScreen.Notifications.route,
-    AdminScreen.Schedule.route,
     AdminScreen.Settings.route,
 )
 
@@ -104,9 +101,10 @@ fun AdminNavHost(onLogout: () -> Unit) {
                 composable(AdminScreen.Map.route) {
                     MapScreen(onBinClick = { navController.navigate(AdminScreen.DetailBin.go(it)) })
                 }
-                composable(AdminScreen.Notifications.route) { NotificationsScreen() }
+                composable(AdminScreen.Notifications.route) {
+                    NotificationsScreen(onBinClick = { navController.navigate(AdminScreen.DetailBin.go(it)) })
+                }
                 composable(AdminScreen.Analytics.route)     { AnalyticsScreen() }
-                composable(AdminScreen.Schedule.route)      { ScheduleScreen() }
                 composable(AdminScreen.Settings.route) {
                     SettingsScreen(
                         onLogout    = { scope.launch { AuthRepository.logout(context) }; WebSocketManager.disconnect(); onLogout() },

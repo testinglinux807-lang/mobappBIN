@@ -24,10 +24,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.brin.data.BinData
 import com.example.brin.data.BinStatus
-import com.example.brin.data.MockData
-import com.example.brin.data.TaskStatus
 import com.example.brin.data.repository.BinRepository
+import com.example.brin.data.repository.PickupRepository
 import com.example.brin.ui.theme.*
 
 private val zonaLabels  = listOf("Zona A", "Zona B", "Zona C", "Zona D", "Zona E")
@@ -40,13 +40,16 @@ fun AnalyticsScreen() {
     var selectedPeriod by remember { mutableIntStateOf(1) }
     val periods = listOf("Hari", "Minggu", "Bulan")
 
-    var bins by remember { mutableStateOf(MockData.bins) }
-    LaunchedEffect(Unit) { BinRepository.getBins().onSuccess { bins = it } }
+    var bins         by remember { mutableStateOf<List<BinData>>(emptyList()) }
+    var pickupSelesai by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        BinRepository.getBins().onSuccess { bins = it }
+        PickupRepository.getPickups().onSuccess { pickupSelesai = it.count { p -> p.status == "SELESAI" } }
+    }
 
-    val totalBin    = bins.size
-    val binKritis   = bins.count { it.status == BinStatus.CRITICAL }
-    val binPickup   = bins.count { it.status == BinStatus.NEED_PICKUP }
-    val ruteSelesai = MockData.routes.count { it.status == TaskStatus.DONE }
+    val totalBin  = bins.size
+    val binKritis = bins.count { it.status == BinStatus.CRITICAL }
+    val binPickup = bins.count { it.status == BinStatus.NEED_PICKUP }
 
     Column(modifier = Modifier.fillMaxSize().background(AppBackground)) {
         Surface(color = CardBg) {
@@ -76,8 +79,8 @@ fun AnalyticsScreen() {
         Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 80.dp)) {
             Spacer(Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AnalyticCard("$totalBin",    "Total Bin",    GreenPrimary,   Icons.Default.DeleteOutline, Modifier.weight(1f))
-                AnalyticCard("$ruteSelesai", "Rute Selesai", StatusNormal,   Icons.Default.CheckCircle,   Modifier.weight(1f))
+                AnalyticCard("$totalBin",     "Total Bin",      GreenPrimary,   Icons.Default.DeleteOutline, Modifier.weight(1f))
+                AnalyticCard("$pickupSelesai","Pickup Selesai", StatusNormal,   Icons.Default.CheckCircle,   Modifier.weight(1f))
                 AnalyticCard("$binKritis",   "Bin Kritis",   StatusCritical, Icons.Default.Warning,        Modifier.weight(1f))
                 AnalyticCard("$binPickup",   "Perlu Pickup", StatusWarning,  Icons.Default.Info,           Modifier.weight(1f))
             }

@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.brin.data.api.ApiArea
 import com.example.brin.data.repository.AreaRepository
 import com.example.brin.data.repository.UserRepository
 import com.example.brin.ui.theme.*
@@ -44,6 +45,12 @@ fun CreateEditUserScreen(
     var errorMsg   by remember { mutableStateOf<String?>(null) }
 
     var roleExpanded by remember { mutableStateOf(false) }
+    var areas        by remember { mutableStateOf<List<ApiArea>>(emptyList()) }
+    var areaExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        AreaRepository.getAreas().onSuccess { areas = it }
+    }
 
     if (isEdit) {
         LaunchedEffect(userId) {
@@ -116,7 +123,29 @@ fun CreateEditUserScreen(
                 }
             }
 
-            UserFormField("Area ID (opsional)", areaId, "ck...", onValueChange = { areaId = it })
+            // Area dropdown
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Area (opsional)", fontSize = 12.sp, color = TextSecondary)
+                ExposedDropdownMenuBox(expanded = areaExpanded, onExpandedChange = { areaExpanded = it }) {
+                    val displayName = areas.find { it.id == areaId }?.name ?: if (areaId.isNotEmpty()) areaId else "Tidak ada"
+                    OutlinedTextField(
+                        value = displayName, onValueChange = {}, readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = areaExpanded) },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = GreenPrimary, unfocusedBorderColor = DividerColor,
+                            focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary
+                        ),
+                        modifier = Modifier.fillMaxWidth().menuAnchor()
+                    )
+                    ExposedDropdownMenu(expanded = areaExpanded, onDismissRequest = { areaExpanded = false }) {
+                        DropdownMenuItem(text = { Text("Tidak ada", color = TextHint) }, onClick = { areaId = ""; areaExpanded = false })
+                        areas.forEach { area ->
+                            DropdownMenuItem(text = { Text(area.name) }, onClick = { areaId = area.id; areaExpanded = false })
+                        }
+                    }
+                }
+            }
 
             errorMsg?.let { Text(it, color = StatusCritical, fontSize = 13.sp) }
 

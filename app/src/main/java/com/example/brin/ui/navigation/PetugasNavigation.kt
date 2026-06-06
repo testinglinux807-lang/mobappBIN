@@ -5,6 +5,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
@@ -15,8 +18,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.example.brin.data.local.AppState
 import com.example.brin.data.repository.AuthRepository
 import com.example.brin.data.websocket.WebSocketManager
+import com.example.brin.data.websocket.WsEvent
+import com.example.brin.util.AlertNotifier
 import kotlinx.coroutines.launch
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -26,10 +32,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.brin.ui.components.PetugasBottomNavBar
 import com.example.brin.ui.screens.petugas.PetugasHomeScreen
-import com.example.brin.ui.screens.petugas.PetugasJadwalScreen
 import com.example.brin.ui.screens.petugas.PetugasPickupScreen
 import com.example.brin.ui.screens.petugas.PetugasProfileScreen
 import com.example.brin.ui.screens.petugas.PetugasScanScreen
+import com.example.brin.ui.screens.admin.NotificationsScreen
 import com.example.brin.ui.screens.shared.DetailBinScreen
 import com.example.brin.ui.screens.shared.DetailRuteScreen
 
@@ -37,8 +43,8 @@ sealed class PetugasScreen(val route: String) {
     object Home    : PetugasScreen("petugas_home")
     object Pickup  : PetugasScreen("petugas_pickup")
     object Scan    : PetugasScreen("petugas_scan")
-    object Jadwal  : PetugasScreen("petugas_jadwal")
     object Profile : PetugasScreen("petugas_profile")
+    object Notifications : PetugasScreen("petugas_notifications")
     object DetailRute : PetugasScreen("petugas_detail_rute/{routeId}") {
         fun go(routeId: String) = "petugas_detail_rute/$routeId"
     }
@@ -51,7 +57,7 @@ val petugasBottomNavRoutes = listOf(
     PetugasScreen.Home.route,
     PetugasScreen.Pickup.route,
     PetugasScreen.Scan.route,
-    PetugasScreen.Jadwal.route,
+    PetugasScreen.Notifications.route,
     PetugasScreen.Profile.route,
 )
 
@@ -67,6 +73,33 @@ fun PetugasNavHost(onLogout: () -> Unit) {
     LaunchedEffect(Unit) { WebSocketManager.connect() }
     DisposableEffect(Unit) { onDispose { WebSocketManager.disconnect() } }
 
+    // Notifikasi tray HP: siapkan channel + minta izin (Android 13+) sekali saat masuk.
+    val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        AlertNotifier.ensureChannel(context)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notifPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    // Munculkan notifikasi tray saat ada ALERT_NEW dari WebSocket (difilter ke area petugas).
+    LaunchedEffect(Unit) {
+        WebSocketManager.events.collect { event ->
+            if (event is WsEvent.AlertNew) {
+                val areaId = AppState.currentUser?.areaId
+                if (areaId == null || event.areaId == null || event.areaId == areaId) {
+                    val node = event.nodeId.ifBlank { event.binId }
+                    AlertNotifier.show(
+                        context = context,
+                        notifId = event.alertId.hashCode(),
+                        title   = AlertNotifier.titleFor(event.type),
+                        message = "$node · ${event.message}"
+                    )
+                }
+            }
+        }
+    }
+
     Scaffold(
         modifier  = Modifier.fillMaxSize(),
         bottomBar = { if (showBottom) PetugasBottomNavBar(navController) }
@@ -79,15 +112,32 @@ fun PetugasNavHost(onLogout: () -> Unit) {
                 exitTransition   = { fadeOut(tween(200)) }
             ) {
                 composable(PetugasScreen.Home.route) {
-                    PetugasHomeScreen(onRouteClick = { navController.navigate(PetugasScreen.DetailRute.go(it)) })
+                    PetugasHomeScreen(
+                        onBinClick   = { navController.navigate(PetugasScreen.DetailBin.go(it)) },
+                        onNotifClick = {
+                            // Notifikasi sekarang tab bottom-nav, jadi navigasi pakai opsi yang sama biar back stack konsisten
+                            navController.navigate(PetugasScreen.Notifications.route) {
+                                popUpTo(PetugasScreen.Home.route) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
                 }
                 composable(PetugasScreen.Pickup.route) {
-                    PetugasPickupScreen(onRouteClick = { navController.navigate(PetugasScreen.DetailRute.go(it)) })
+                    PetugasPickupScreen(onBinClick = { navController.navigate(PetugasScreen.DetailBin.go(it)) })
                 }
                 composable(PetugasScreen.Scan.route) {
                     PetugasScanScreen(onBinClick = { navController.navigate(PetugasScreen.DetailBin.go(it)) })
                 }
-                composable(PetugasScreen.Jadwal.route)  { PetugasJadwalScreen() }
+                composable(PetugasScreen.Notifications.route) {
+                    NotificationsScreen(
+                        onBinClick      = { navController.navigate(PetugasScreen.DetailBin.go(it)) },
+                        areaScopeId     = AppState.currentUser?.areaId,
+                        allowResolve    = false,
+                        showPickupCards = false
+                    )
+                }
                 composable(PetugasScreen.Profile.route) {
                     PetugasProfileScreen(onLogout = {
                         scope.launch { AuthRepository.logout(context) }

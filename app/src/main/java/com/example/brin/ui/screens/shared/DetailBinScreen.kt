@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -21,16 +22,22 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.runtime.rememberCoroutineScope
 import com.example.brin.data.BinData
 import com.example.brin.data.BinStatus
-import com.example.brin.data.MockData
 import com.example.brin.data.local.AppState
+import com.example.brin.data.repository.AlertRepository
 import com.example.brin.data.repository.BinRepository
+import com.example.brin.data.repository.PickupRepository
+import com.example.brin.data.websocket.WebSocketManager
+import com.example.brin.data.websocket.WsEvent
 import com.example.brin.ui.theme.*
+import com.example.brin.util.LocationHelper
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -44,15 +51,49 @@ fun DetailBinScreen(
     onDeleted: (() -> Unit)? = null
 ) {
     val scope         = rememberCoroutineScope()
+    val context       = LocalContext.current
     val isAdmin       = AppState.userRole == "ADMIN"
-    var bin           by remember { mutableStateOf(MockData.getBinById(binId)) }
-    var showQrDialog  by remember { mutableStateOf(false) }
-    var showDelDialog by remember { mutableStateOf(false) }
-    var isDeleting    by remember { mutableStateOf(false) }
-    var deleteError   by remember { mutableStateOf<String?>(null) }
+    var bin           by remember { mutableStateOf<BinData?>(null) }
+    var showQrDialog      by remember { mutableStateOf(false) }
+    var showDelDialog     by remember { mutableStateOf(false) }
+    var isDeleting        by remember { mutableStateOf(false) }
+    var deleteError       by remember { mutableStateOf<String?>(null) }
+    var showPickupDialog  by remember { mutableStateOf(false) }
+    var isCompletingPickup by remember { mutableStateOf(false) }
+    var pickupError       by remember { mutableStateOf<String?>(null) }
+    var pickupSuccess     by remember { mutableStateOf(false) }
+    // Status alert dari ALERT (bukan volume), supaya konfirmasi manual yang me-resolve
+    // alert langsung menghilangkan banner peringatan di sini.
+    var hasOpenAlert  by remember { mutableStateOf(false) }
+    var openAlertMsg  by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(binId) {
         BinRepository.getBinById(binId).onSuccess { bin = it }
+        AlertRepository.getAlerts(resolved = false).onSuccess { list ->
+            val a = list.firstOrNull { it.binRefId == binId && (it.rawType == "FULL_VOLUME" || it.rawType == "FULL_WEIGHT") }
+            hasOpenAlert = a != null
+            openAlertMsg = a?.message
+        }
+    }
+
+    // Live update via WebSocket: alert resolve/baru + pembacaan sensor terbaru.
+    LaunchedEffect(binId) {
+        WebSocketManager.events.collect { event ->
+            when (event) {
+                is WsEvent.AlertResolved -> if (event.binId == binId) { hasOpenAlert = false; openAlertMsg = null }
+                is WsEvent.AlertNew -> if (event.binId == binId && (event.type == "FULL_VOLUME" || event.type == "FULL_WEIGHT")) {
+                    hasOpenAlert = true; openAlertMsg = event.message
+                }
+                is WsEvent.BinUpdate -> if (event.binId == binId) bin = bin?.copy(
+                    capacity   = event.volume,
+                    battery    = event.battery,
+                    gas        = event.gas,
+                    lastUpdate = "Baru saja",
+                    status     = when { event.volume >= 90 -> BinStatus.CRITICAL; event.volume >= 70 -> BinStatus.NEED_PICKUP; else -> BinStatus.NORMAL }
+                )
+                else -> Unit
+            }
+        }
     }
 
     val currentBin = bin  // local snapshot — avoids smart-cast issue on delegated property
@@ -83,14 +124,21 @@ fun DetailBinScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
                         Text(currentBin.nodeId, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(Modifier.height(2.dp))
-                        Text("${currentBin.location}, ${currentBin.area}", fontSize = 13.sp, color = Color.White.copy(alpha = 0.65f))
+                        Text(currentBin.location, fontSize = 13.sp, color = Color.White.copy(alpha = 0.65f),
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(if (currentBin.online) Color(0xFF4ADE80) else Color(0xFFBDBDBD)))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (currentBin.online) "Online" else "Offline", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.85f))
+                        }
                     }
                     Surface(shape = RoundedCornerShape(6.dp), color = sColor.copy(alpha = 0.25f)) {
                         Text(sLabel, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                            maxLines = 1, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
                     }
                 }
 
@@ -119,7 +167,7 @@ fun DetailBinScreen(
         }
 
         Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 80.dp)) {
-            if (currentBin.alertText.isNotEmpty()) {
+            if (hasOpenAlert) {
                 Spacer(Modifier.height(16.dp))
                 Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(CardBg)) {
                     Row(modifier = Modifier.height(IntrinsicSize.Min)) {
@@ -127,7 +175,7 @@ fun DetailBinScreen(
                         Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Warning, contentDescription = null, tint = sColor, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Kapasitas ${currentBin.capacity}% · ${currentBin.alertText}", fontSize = 13.sp, color = sColor, fontWeight = FontWeight.Medium)
+                            Text("Kapasitas ${currentBin.capacity}% · ${currentBin.alertText.ifEmpty { "Perlu diangkut" }}", fontSize = 13.sp, color = sColor, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -138,7 +186,11 @@ fun DetailBinScreen(
             Spacer(Modifier.height(8.dp))
             Surface(shape = RoundedCornerShape(12.dp), color = CardBg, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 Column {
-                    InfoRow(Icons.Default.LocationOn,  "Lokasi",          "${currentBin.location}, ${currentBin.area}")
+                    InfoRow(Icons.Default.LocationOn,  "Lokasi",          currentBin.location)
+                    if (currentBin.area.isNotEmpty()) {
+                        HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                        InfoRow(Icons.Default.Place,       "Area",            currentBin.area)
+                    }
                     HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
                     InfoRow(Icons.Default.Schedule,    "Terakhir Update", currentBin.lastUpdate)
                     HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
@@ -155,7 +207,11 @@ fun DetailBinScreen(
             Spacer(Modifier.height(8.dp))
             Surface(shape = RoundedCornerShape(12.dp), color = CardBg, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 Column {
-                    FlatAction("Generate QR Petugas", GreenPrimary, bold = true) { showQrDialog = true }
+                    if (isAdmin) {
+                        FlatAction("Generate QR", GreenPrimary, bold = true) { showQrDialog = true }
+                    } else {
+                        FlatAction("Pickup Selesai", StatusWarning, bold = true) { showPickupDialog = true }
+                    }
                     if (isAdmin && onEdit != null) {
                         HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
                         FlatAction("Edit Bin", TextPrimary) { onEdit() }
@@ -169,6 +225,59 @@ fun DetailBinScreen(
                 }
             }
         }
+    }
+
+    if (showPickupDialog && currentBin != null) {
+        AlertDialog(
+            onDismissRequest = { if (!isCompletingPickup) { showPickupDialog = false; pickupError = null; pickupSuccess = false } },
+            containerColor   = CardBg,
+            title = { Text("Pickup Selesai?", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text  = {
+                if (pickupSuccess) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = StatusNormal, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Pickup berhasil dicatat. Menunggu konfirmasi sensor.", color = StatusNormal, fontSize = 13.sp)
+                    }
+                } else {
+                    Column {
+                        Text("Konfirmasi bahwa pickup bin ${currentBin.nodeId} (${currentBin.location}) telah selesai dilakukan.", color = TextSecondary, fontSize = 14.sp)
+                        pickupError?.let { Spacer(Modifier.height(8.dp)); Text(it, color = StatusCritical, fontSize = 13.sp) }
+                    }
+                }
+            },
+            confirmButton = {
+                if (pickupSuccess) {
+                    Button(onClick = { showPickupDialog = false; pickupSuccess = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)) { Text("Tutup") }
+                } else {
+                    Button(
+                        onClick = {
+                            isCompletingPickup = true; pickupError = null
+                            scope.launch {
+                                val loc = LocationHelper.getCurrentLocation(context)
+                                PickupRepository.completePickup(currentBin.id, loc?.lat, loc?.lng)
+                                    .onSuccess { pickupSuccess = true }
+                                    .onFailure { pickupError = it.message ?: "Gagal mencatat pickup" }
+                                isCompletingPickup = false
+                            }
+                        },
+                        enabled = !isCompletingPickup,
+                        colors  = ButtonDefaults.buttonColors(containerColor = StatusWarning)
+                    ) {
+                        if (isCompletingPickup) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else Text("Konfirmasi")
+                    }
+                }
+            },
+            dismissButton = {
+                if (!pickupSuccess) {
+                    TextButton(onClick = { showPickupDialog = false; pickupError = null }, enabled = !isCompletingPickup) {
+                        Text("Batal", color = TextSecondary)
+                    }
+                }
+            }
+        )
     }
 
     if (showQrDialog && currentBin != null) {
@@ -225,7 +334,9 @@ private fun InfoRow(icon: ImageVector, label: String, value: String, valueColor:
         Icon(icon, contentDescription = null, tint = TextHint, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(12.dp))
         Text(label, fontSize = 13.sp, color = TextSecondary, modifier = Modifier.weight(1f))
-        Text(value, fontSize = 13.sp, color = valueColor, fontWeight = FontWeight.Medium)
+        Text(value, fontSize = 13.sp, color = valueColor, fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.End, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1.5f))
     }
 }
 
@@ -243,7 +354,7 @@ private fun FlatAction(label: String, color: Color, bold: Boolean = false, onCli
 
 @Composable
 private fun QrDialog(bin: BinData, onDismiss: () -> Unit) {
-    val qrContent = "brin://navigate?binId=${bin.id}&lat=${bin.lat}&lng=${bin.lng}&loc=${bin.location}"
+    val qrContent = "brin://pickup?binId=${bin.id}&lat=${bin.lat}&lng=${bin.lng}"
     val qrBitmap  = remember(qrContent) { generateQrBitmap(qrContent) }
     val sColor    = statusColor(bin.status)
 
@@ -252,14 +363,15 @@ private fun QrDialog(bin: BinData, onDismiss: () -> Unit) {
             Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
-                        Text("QR Code Petugas", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text("QR Code", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                         Text(bin.nodeId, fontSize = 13.sp, color = GreenPrimary, fontWeight = FontWeight.SemiBold)
                     }
                     IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "Tutup", tint = TextHint) }
                 }
                 Spacer(Modifier.height(16.dp))
-                Surface(shape = RoundedCornerShape(12.dp), color = Color.White) {
-                    Image(bitmap = qrBitmap.asImageBitmap(), contentDescription = "QR Code ${bin.id}", modifier = Modifier.size(200.dp).padding(8.dp))
+                Surface(shape = RoundedCornerShape(12.dp), color = Color.White, modifier = Modifier.fillMaxWidth()) {
+                    Image(bitmap = qrBitmap.asImageBitmap(), contentDescription = "QR Code ${bin.id}",
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f).padding(16.dp))
                 }
                 Spacer(Modifier.height(14.dp))
                 Surface(shape = RoundedCornerShape(10.dp), color = AppBackground) {
@@ -270,7 +382,7 @@ private fun QrDialog(bin: BinData, onDismiss: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                Text("Tunjukkan QR ini ke petugas. Setelah scan,\npetugas akan diarahkan ke lokasi bin.",
+                Text("Tempel QR ini di tempat sampah. Petugas scan\ndi lokasi untuk langsung mencatat pickup.",
                     fontSize = 11.sp, color = TextHint, textAlign = TextAlign.Center, lineHeight = 16.sp)
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
@@ -292,7 +404,7 @@ private fun QrInfoRow(icon: ImageVector, text: String, color: Color = TextSecond
 }
 
 private fun generateQrBitmap(content: String, size: Int = 512): Bitmap {
-    val hints  = mapOf(EncodeHintType.MARGIN to 1)
+    val hints  = mapOf(EncodeHintType.MARGIN to 3)
     val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size, hints)
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     for (x in 0 until size) for (y in 0 until size) {

@@ -22,16 +22,36 @@ object AlertRepository {
         val resp = RetrofitClient.api.resolveAlert(id)
         if (!resp.success) error("Gagal resolve alert")
     }
+
+    /** Build a NotificationItem from a live WebSocket ALERT_NEW payload (no network call). */
+    fun liveAlertItem(
+        alertId: String, nodeId: String, binId: String,
+        type: String, message: String, createdAt: String
+    ) = NotificationItem(
+        id       = alertId,
+        binId    = nodeId.ifBlank { binId },
+        title    = type.toTitle(),
+        message  = message,
+        time     = createdAt.toRelativeTime(),
+        type     = type.toBinStatus(),
+        isRead   = false,
+        binRefId = binId,
+        rawType  = type,
+        createdAtRaw = createdAt
+    )
 }
 
 private fun ApiAlert.toNotificationItem() = NotificationItem(
-    id      = id,
-    binId   = binId,
-    title   = type.toTitle(),
-    message = message,
-    time    = createdAt.toRelativeTime(),
-    type    = type.toBinStatus(),
-    isRead  = resolved
+    id       = id,
+    binId    = bin?.nodeId ?: binId,
+    title    = type.toTitle(),
+    message  = message,
+    time     = createdAt.toRelativeTime(),
+    type     = type.toBinStatus(),
+    isRead   = resolved,
+    binRefId = binId,
+    rawType  = type,
+    createdAtRaw = createdAt
 )
 
 private fun String.toTitle() = when (this) {

@@ -14,9 +14,9 @@ import android.net.Uri
 import android.location.LocationManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -48,9 +48,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.brin.data.BinData
 import com.example.brin.data.BinStatus
-import com.example.brin.data.MockData
 import com.example.brin.data.api.OptimalRouteData
+import com.example.brin.data.api.RouteStop
 import com.example.brin.data.repository.BinRepository
+import com.example.brin.data.websocket.WebSocketManager
+import com.example.brin.data.websocket.WsEvent
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
+import java.io.ByteArrayOutputStream
+import kotlin.math.*
 import com.example.brin.ui.screens.shared.BinStatusBadge
 import com.example.brin.ui.screens.shared.statusColor
 import com.example.brin.ui.screens.shared.statusLabel
@@ -65,6 +71,7 @@ import org.osmdroid.views.overlay.Marker
 
 private enum class MapFilter { ALL, CRITICAL, NEED_PICKUP, NORMAL }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(onBinClick: (String) -> Unit) {
     var activeFilter   by remember { mutableStateOf(MapFilter.ALL) }
@@ -75,11 +82,38 @@ fun MapScreen(onBinClick: (String) -> Unit) {
     var userLocation   by remember { mutableStateOf<GeoPoint?>(null) }
     var locSnackbar    by remember { mutableStateOf("") }
     var showRouteDialog by remember { mutableStateOf(false) }
+    var showRouteSelector by remember { mutableStateOf(false) }
+    var selectedRouteBins by remember { mutableStateOf<Set<String>>(emptySet()) }
     var routeLoading   by remember { mutableStateOf(false) }
     var routeData      by remember { mutableStateOf<OptimalRouteData?>(null) }
     var routeError     by remember { mutableStateOf<String?>(null) }
+    var allBins        by remember { mutableStateOf<List<BinData>>(emptyList()) }
+    val sheetState     = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context        = LocalContext.current
     val scope          = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) { BinRepository.getBins().onSuccess { allBins = it } }
+
+    // Live bin updates via WebSocket — patch markers without re-fetch
+    LaunchedEffect(Unit) {
+        WebSocketManager.events.collect { event ->
+            when (event) {
+                is WsEvent.BinUpdate -> allBins = allBins.map { bin ->
+                    if (bin.id == event.binId) bin.copy(
+                        capacity   = event.volume,
+                        battery    = event.battery,
+                        gas        = event.gas,
+                        status     = when { event.volume >= 90 -> BinStatus.CRITICAL; event.volume >= 70 -> BinStatus.NEED_PICKUP; else -> BinStatus.NORMAL },
+                        lastUpdate = "Baru saja"
+                    ) else bin
+                }
+                is WsEvent.BinStatus -> allBins = allBins.map { bin ->
+                    if (bin.nodeId == event.nodeId) bin.copy(online = event.status.equals("online", ignoreCase = true)) else bin
+                }
+                else -> Unit
+            }
+        }
+    }
 
     fun fetchLocation() {
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
@@ -102,17 +136,17 @@ fun MapScreen(onBinClick: (String) -> Unit) {
         else permLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
 
-    val filteredBins = remember(activeFilter) {
+    val filteredBins = remember(activeFilter, allBins) {
         when (activeFilter) {
-            MapFilter.ALL         -> MockData.bins
-            MapFilter.CRITICAL    -> MockData.bins.filter { it.status == BinStatus.CRITICAL }
-            MapFilter.NEED_PICKUP -> MockData.bins.filter { it.status == BinStatus.NEED_PICKUP }
-            MapFilter.NORMAL      -> MockData.bins.filter { it.status == BinStatus.NORMAL }
+            MapFilter.ALL         -> allBins
+            MapFilter.CRITICAL    -> allBins.filter { it.status == BinStatus.CRITICAL }
+            MapFilter.NEED_PICKUP -> allBins.filter { it.status == BinStatus.NEED_PICKUP }
+            MapFilter.NORMAL      -> allBins.filter { it.status == BinStatus.NORMAL }
         }
     }
-    val searchResults = remember(searchQuery) {
+    val searchResults = remember(searchQuery, allBins) {
         if (searchQuery.length < 2) emptyList()
-        else MockData.bins.filter { it.id.contains(searchQuery, ignoreCase = true) || it.location.contains(searchQuery, ignoreCase = true) }
+        else allBins.filter { it.nodeId.contains(searchQuery, ignoreCase = true) || it.location.contains(searchQuery, ignoreCase = true) }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -150,7 +184,7 @@ fun MapScreen(onBinClick: (String) -> Unit) {
                                 Icon(Icons.Default.LocationOn, contentDescription = null, tint = statusCol, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(bin.id, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                    Text(bin.nodeId, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                                     Text(bin.location, fontSize = 12.sp, color = TextSecondary)
                                 }
                                 BinStatusBadge(bin.status)
@@ -192,25 +226,24 @@ fun MapScreen(onBinClick: (String) -> Unit) {
             }
         }
 
-        AnimatedVisibility(visible = selectedBin != null, enter = slideInVertically { it }, exit = slideOutVertically { it }, modifier = Modifier.align(Alignment.BottomCenter)) {
-            selectedBin?.let { bin -> BinPopupCard(bin = bin, onClose = { selectedBin = null }, onDetail = { onBinClick(bin.id) }) }
+        if (selectedBin != null) {
+            ModalBottomSheet(
+                onDismissRequest = { selectedBin = null },
+                sheetState       = sheetState,
+                containerColor   = CardBg,
+            ) {
+                selectedBin?.let { bin -> BinPopupCard(bin = bin, onDetail = { onBinClick(bin.id) }) }
+            }
         }
 
         // Generate Rute QR FAB
         FloatingActionButton(
             onClick = {
-                routeData  = null
-                routeError = null
-                showRouteDialog = true
-                routeLoading    = true
-                val lat = userLocation?.latitude  ?: -6.9175
-                val lng = userLocation?.longitude ?: 107.6191
-                scope.launch {
-                    BinRepository.getOptimalRoute(lat, lng)
-                        .onSuccess { routeData = it }
-                        .onFailure { routeError = it.message ?: "Gagal memuat rute" }
-                    routeLoading = false
-                }
+                // Pre-select bins that need attention (critical + need pickup)
+                selectedRouteBins = allBins
+                    .filter { it.status == BinStatus.CRITICAL || it.status == BinStatus.NEED_PICKUP }
+                    .map { it.id }.toSet()
+                showRouteSelector = true
             },
             containerColor = GreenPrimary,
             contentColor   = Color.White,
@@ -219,6 +252,33 @@ fun MapScreen(onBinClick: (String) -> Unit) {
                 .padding(start = 16.dp, bottom = 96.dp)
         ) {
             Icon(Icons.Default.AltRoute, contentDescription = "Generate Rute QR")
+        }
+
+        if (showRouteSelector) {
+            RouteBinSelector(
+                bins        = allBins,
+                selectedIds = selectedRouteBins,
+                onToggle    = { id ->
+                    selectedRouteBins = if (selectedRouteBins.contains(id)) selectedRouteBins - id else selectedRouteBins + id
+                },
+                onToggleAll = { all ->
+                    selectedRouteBins = if (all) allBins.map { it.id }.toSet() else emptySet()
+                },
+                onDismiss   = { showRouteSelector = false },
+                onGenerate  = {
+                    val chosen = allBins.filter { selectedRouteBins.contains(it.id) }
+                    showRouteSelector = false
+                    routeData  = null
+                    routeError = null
+                    routeLoading = true
+                    showRouteDialog = true
+                    scope.launch {
+                        val start = userLocation ?: GeoPoint(-6.9175, 107.6191)
+                        routeData = buildLocalRoute(start, chosen)
+                        routeLoading = false
+                    }
+                }
+            )
         }
 
         if (showRouteDialog) {
@@ -330,6 +390,133 @@ private fun decodeBase64Bitmap(dataUri: String): Bitmap? = runCatching {
 }.getOrNull()
 
 @Composable
+private fun RouteBinSelector(
+    bins: List<BinData>,
+    selectedIds: Set<String>,
+    onToggle: (String) -> Unit,
+    onToggleAll: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+    onGenerate: () -> Unit
+) {
+    // Order: critical & need-pickup first, then the rest
+    val ordered = remember(bins) {
+        bins.sortedBy {
+            when (it.status) {
+                BinStatus.CRITICAL    -> 0
+                BinStatus.NEED_PICKUP -> 1
+                BinStatus.NORMAL      -> 2
+            }
+        }
+    }
+    val allSelected = selectedIds.size == bins.size && bins.isNotEmpty()
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(20.dp), color = CardBg) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Pilih Bin untuk Rute", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "Tutup", tint = TextHint) }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onToggleAll(!allSelected) }.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(checked = allSelected, onCheckedChange = { onToggleAll(it) }, colors = CheckboxDefaults.colors(checkedColor = GreenPrimary))
+                    Text("Pilih semua", fontSize = 13.sp, color = TextSecondary)
+                }
+
+                Spacer(Modifier.height(4.dp))
+
+                Column(modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    if (ordered.isEmpty()) {
+                        Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                            Text("Belum ada bin.", color = TextHint, fontSize = 13.sp)
+                        }
+                    } else {
+                        ordered.forEach { bin ->
+                            val checked = selectedIds.contains(bin.id)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onToggle(bin.id) }.padding(vertical = 6.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(checked = checked, onCheckedChange = { onToggle(bin.id) }, colors = CheckboxDefaults.colors(checkedColor = GreenPrimary))
+                                Spacer(Modifier.width(4.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(bin.nodeId, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                    Text(bin.location, fontSize = 11.sp, color = TextSecondary)
+                                }
+                                BinStatusBadge(bin.status)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                Button(
+                    onClick = onGenerate,
+                    enabled = selectedIds.isNotEmpty(),
+                    colors  = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
+                    shape   = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.AltRoute, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Generate Rute (${selectedIds.size})", fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+/** Builds an optimized route client-side via greedy nearest-neighbor from [start]. */
+private fun buildLocalRoute(start: GeoPoint, bins: List<BinData>): OptimalRouteData {
+    if (bins.isEmpty()) return OptimalRouteData(emptyList(), null, null, "Tidak ada bin dipilih.")
+
+    val remaining = bins.toMutableList()
+    val ordered   = mutableListOf<RouteStop>()
+    var curLat = start.latitude
+    var curLng = start.longitude
+    while (remaining.isNotEmpty()) {
+        val next = remaining.minByOrNull { haversineKm(curLat, curLng, it.lat, it.lng) }!!
+        val dist = haversineKm(curLat, curLng, next.lat, next.lng)
+        ordered.add(RouteStop(next.id, next.nodeId, next.location, next.lat, next.lng, dist))
+        curLat = next.lat; curLng = next.lng
+        remaining.remove(next)
+    }
+
+    val origin     = "${start.latitude},${start.longitude}"
+    val destination = "${ordered.last().lat},${ordered.last().lng}"
+    val waypoints  = ordered.dropLast(1).joinToString("|") { "${it.lat},${it.lng}" }
+    val url = buildString {
+        append("https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination")
+        if (waypoints.isNotEmpty()) append("&waypoints=$waypoints")
+        append("&travelmode=driving")
+    }
+    return OptimalRouteData(ordered, url, genQrBase64(url), null)
+}
+
+private fun haversineKm(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+    val r = 6371.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLng = Math.toRadians(lng2 - lng1)
+    val a = sin(dLat / 2).pow(2) + cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLng / 2).pow(2)
+    return r * 2 * atan2(sqrt(a), sqrt(1 - a))
+}
+
+private fun genQrBase64(text: String): String? = runCatching {
+    val size = 600
+    val matrix = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size)
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    for (x in 0 until size) for (y in 0 until size) {
+        bmp.setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+    }
+    val baos = ByteArrayOutputStream()
+    bmp.compress(Bitmap.CompressFormat.PNG, 100, baos)
+    android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP)
+}.getOrNull()
+
+@Composable
 private fun MapFilterChip(activeFilter: MapFilter, filter: MapFilter, label: String, color: Color, onClick: () -> Unit) {
     val isActive = activeFilter == filter
     Box(modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(if (isActive) color else Color.Transparent).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
@@ -338,40 +525,38 @@ private fun MapFilterChip(activeFilter: MapFilter, filter: MapFilter, label: Str
 }
 
 @Composable
-private fun BinPopupCard(bin: BinData, onClose: () -> Unit, onDetail: () -> Unit) {
+private fun BinPopupCard(bin: BinData, onDetail: () -> Unit) {
     val statusCol = statusColor(bin.status)
     val statusLbl = statusLabel(bin.status)
-    Surface(shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp), color = CardBg, modifier = Modifier.fillMaxWidth().shadow(16.dp, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))) {
-        Column(modifier = Modifier.padding(20.dp).padding(bottom = 80.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text(bin.id, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("· ${bin.location}", fontSize = 13.sp, color = TextSecondary)
-                }
-                IconButton(onClick = onClose) { Icon(Icons.Default.Close, contentDescription = "Tutup", tint = TextHint) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(top = 4.dp, bottom = 28.dp)
+            .navigationBarsPadding()
+    ) {
+        Text(bin.nodeId, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text(bin.location, fontSize = 13.sp, color = TextSecondary)
+        Spacer(Modifier.height(16.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Kapasitas", fontSize = 14.sp, color = TextSecondary)
+            Text("${bin.capacity}%", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = statusCol)
+        }
+        Spacer(Modifier.height(6.dp))
+        LinearProgressIndicator(progress = { bin.capacity / 100f }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)), color = statusCol, trackColor = DividerColor)
+        Spacer(Modifier.height(16.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = RoundedCornerShape(6.dp), color = statusCol.copy(alpha = 0.12f)) {
+                Text(statusLbl, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = statusCol, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
             }
-            Spacer(Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Kapasitas", fontSize = 14.sp, color = TextSecondary)
-                Text("${bin.capacity}%", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = statusCol)
-            }
-            Spacer(Modifier.height(6.dp))
-            LinearProgressIndicator(progress = { bin.capacity / 100f }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)), color = statusCol, trackColor = DividerColor)
-            Spacer(Modifier.height(14.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Surface(shape = RoundedCornerShape(6.dp), color = statusCol.copy(alpha = 0.12f)) {
-                    Text(statusLbl, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = statusCol, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onDetail) {
-                        Text("Lihat Detail", color = GreenPrimary, fontSize = 13.sp)
-                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = GreenPrimary, modifier = Modifier.size(16.dp))
-                    }
-                    Spacer(Modifier.width(4.dp))
-                    Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(GreenPrimary).clickable { }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Navigation, contentDescription = "Navigasi", tint = Color.White, modifier = Modifier.size(20.dp))
-                    }
-                }
+            Button(
+                onClick = onDetail,
+                colors  = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
+                shape   = RoundedCornerShape(10.dp)
+            ) {
+                Text("Lihat Detail", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(16.dp))
             }
         }
     }

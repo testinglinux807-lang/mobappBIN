@@ -17,6 +17,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.brin.data.api.ApiArea
+import com.example.brin.data.repository.AreaRepository
 import com.example.brin.data.repository.BinRepository
 import com.example.brin.ui.theme.*
 import kotlinx.coroutines.launch
@@ -43,9 +45,15 @@ fun CreateEditBinScreen(
     var gasThr     by remember { mutableStateOf("") }
     var batteryThr by remember { mutableStateOf("") }
 
-    var isLoading  by remember { mutableStateOf(isEdit) }
-    var isSaving   by remember { mutableStateOf(false) }
-    var errorMsg   by remember { mutableStateOf<String?>(null) }
+    var isLoading    by remember { mutableStateOf(isEdit) }
+    var isSaving     by remember { mutableStateOf(false) }
+    var errorMsg     by remember { mutableStateOf<String?>(null) }
+    var areas        by remember { mutableStateOf<List<ApiArea>>(emptyList()) }
+    var areaExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        AreaRepository.getAreas().onSuccess { areas = it }
+    }
 
     // Load existing bin data in edit mode
     if (isEdit) {
@@ -99,7 +107,29 @@ fun CreateEditBinScreen(
             FormField("Lokasi", location, "Lobby Gedung A", onValueChange = { location = it })
             FormField("Latitude", latStr, "-6.9175", KeyboardType.Decimal, onValueChange = { latStr = it })
             FormField("Longitude", lngStr, "107.6191", KeyboardType.Decimal, onValueChange = { lngStr = it })
-            FormField("Area ID (opsional)", areaId, "ck...", onValueChange = { areaId = it })
+            // Area dropdown
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Area (opsional)", fontSize = 12.sp, color = TextSecondary)
+                ExposedDropdownMenuBox(expanded = areaExpanded, onExpandedChange = { areaExpanded = it }) {
+                    val displayName = areas.find { it.id == areaId }?.name ?: if (areaId.isNotEmpty()) areaId else "Tidak ada"
+                    OutlinedTextField(
+                        value = displayName, onValueChange = {}, readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = areaExpanded) },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = GreenPrimary, unfocusedBorderColor = DividerColor,
+                            focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary
+                        ),
+                        modifier = Modifier.fillMaxWidth().menuAnchor()
+                    )
+                    ExposedDropdownMenu(expanded = areaExpanded, onDismissRequest = { areaExpanded = false }) {
+                        DropdownMenuItem(text = { Text("Tidak ada", color = TextHint) }, onClick = { areaId = ""; areaExpanded = false })
+                        areas.forEach { area ->
+                            DropdownMenuItem(text = { Text(area.name) }, onClick = { areaId = area.id; areaExpanded = false })
+                        }
+                    }
+                }
+            }
 
             if (isEdit) {
                 Spacer(Modifier.height(4.dp))

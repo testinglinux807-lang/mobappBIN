@@ -44,11 +44,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -83,11 +86,13 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.brin.data.BinData
-import com.example.brin.data.MockData
 import com.example.brin.data.repository.BinRepository
+import com.example.brin.data.repository.PickupRepository
+import com.example.brin.util.LocationHelper
 import com.example.brin.ui.theme.GreenLight
 import com.example.brin.ui.theme.GreenPrimary
 import com.example.brin.ui.theme.GreenSurface
+import com.example.brin.ui.theme.StatusCritical
 import com.example.brin.ui.theme.StatusNormal
 import com.example.brin.ui.theme.StatusNormalBg
 import com.example.brin.ui.theme.TextPrimary
@@ -107,18 +112,40 @@ fun PetugasScanScreen(onBinClick: (String) -> Unit = {}) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         )
     }
-    var scannedBinId   by remember { mutableStateOf<String?>(null) }
-    var scannedBin     by remember { mutableStateOf<BinData?>(null) }
-    var isScanning     by remember { mutableStateOf(true) }
-    var mapsUrl        by remember { mutableStateOf<String?>(null) }
-    val scope          = rememberCoroutineScope()
+    var scannedBinId by remember { mutableStateOf<String?>(null) }
+    var scannedBin   by remember { mutableStateOf<BinData?>(null) }
+    var isScanning   by remember { mutableStateOf(true) }
+    var pickupPhase  by remember { mutableStateOf("") }   // "", "loading", "done", "error"
+    var pickupMsg    by remember { mutableStateOf("") }
+    val scope        = rememberCoroutineScope()
 
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        hasCameraPermission = it
+    val permissions = arrayOf(
+        Manifest.permission.CAMERA,
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    )
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        hasCameraPermission = result[Manifest.permission.CAMERA] ?: hasCameraPermission
     }
 
     LaunchedEffect(Unit) {
-        if (!hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
+        if (!hasCameraPermission) permissionLauncher.launch(permissions)
+    }
+
+    // Scan QR bin → langsung catat pickup (kirim GPS)
+    fun runPickup(binId: String) {
+        scope.launch {
+            pickupPhase = "loading"
+            val loc = LocationHelper.getCurrentLocation(context)
+            if (loc == null) {
+                pickupPhase = "error"
+                pickupMsg = "Lokasi GPS gagal didapat. Aktifkan GPS & izinkan lokasi."
+                return@launch
+            }
+            PickupRepository.completePickup(binId, loc.lat, loc.lng)
+                .onSuccess { pickupPhase = "done"; pickupMsg = "Pickup tercatat, menunggu konfirmasi sensor." }
+                .onFailure { pickupPhase = "error"; pickupMsg = it.message ?: "Gagal mencatat pickup" }
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
@@ -127,37 +154,32 @@ fun PetugasScanScreen(onBinClick: (String) -> Unit = {}) {
                 modifier = Modifier.fillMaxSize(),
                 onBarcode = { raw ->
                     if (!isScanning) return@ScanCameraView
-                    isScanning = false
-                    // Google Maps or any HTTPS URL → open directly in browser
-                    if (raw.startsWith("http://") || raw.startsWith("https://")) {
-                        mapsUrl = raw
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(raw)))
-                        return@ScanCameraView
-                    }
-                    // brin:// deep link → load bin detail
                     val uri   = runCatching { Uri.parse(raw) }.getOrNull()
                     val binId = uri?.getQueryParameter("binId")
-                    if (binId != null) {
-                        scannedBinId = binId
-                        scope.launch {
-                            BinRepository.getBinById(binId)
-                                .onSuccess { scannedBin = it }
-                                .onFailure { scannedBin = MockData.getBinById(binId) }
+                    when {
+                        binId != null -> {
+                            isScanning = false
+                            scannedBinId = binId
+                            scope.launch { BinRepository.getBinById(binId).onSuccess { scannedBin = it }.onFailure { } }
+                            runPickup(binId)
                         }
-                    } else {
-                        // Unknown format — reset
-                        isScanning = true
+                        raw.startsWith("http://") || raw.startsWith("https://") -> {
+                            isScanning = false
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(raw)))
+                        }
+                        else -> { /* format tak dikenal — biarkan terus memindai */ }
                     }
                 }
             )
             ScanUiOverlay(
                 scannedBinId = scannedBinId,
                 scannedBin   = scannedBin,
-                onNavigate   = { scannedBinId?.let(onBinClick) },
-                onReset      = { scannedBinId = null; scannedBin = null; mapsUrl = null; isScanning = true }
+                pickupPhase  = pickupPhase,
+                pickupMsg    = pickupMsg,
+                onReset      = { scannedBinId = null; scannedBin = null; pickupPhase = ""; pickupMsg = ""; isScanning = true }
             )
         } else {
-            NoCameraPermission(onRequest = { permissionLauncher.launch(Manifest.permission.CAMERA) })
+            NoCameraPermission(onRequest = { permissionLauncher.launch(permissions) })
         }
     }
 }
@@ -219,7 +241,7 @@ private fun processImageProxy(
 }
 
 @Composable
-private fun ScanUiOverlay(scannedBinId: String?, scannedBin: BinData?, onNavigate: () -> Unit, onReset: () -> Unit) {
+private fun ScanUiOverlay(scannedBinId: String?, scannedBin: BinData?, pickupPhase: String, pickupMsg: String, onReset: () -> Unit) {
     val circleR = 148.dp
 
     val infinite = rememberInfiniteTransition(label = "scan")
@@ -334,7 +356,7 @@ private fun ScanUiOverlay(scannedBinId: String?, scannedBin: BinData?, onNavigat
                 },
                 label = "card"
             ) { binId ->
-                if (binId == null) ScanHintCard() else ScanResultCard(binId, scannedBin, onNavigate, onReset)
+                if (binId == null) ScanHintCard() else ScanResultCard(binId, scannedBin, pickupPhase, pickupMsg, onReset)
             }
         }
     }
@@ -360,57 +382,60 @@ private fun ScanHintCard() {
 }
 
 @Composable
-private fun ScanResultCard(binId: String, bin: BinData?, onNavigate: () -> Unit, onReset: () -> Unit) {
-
+private fun ScanResultCard(binId: String, bin: BinData?, pickupPhase: String, pickupMsg: String, onReset: () -> Unit) {
     Surface(
-        shape         = RoundedCornerShape(20.dp),
-        color         = Color.White,
+        shape           = RoundedCornerShape(20.dp),
+        color           = Color.White,
         shadowElevation = 10.dp,
-        modifier      = Modifier.fillMaxWidth()
+        modifier        = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(11.dp))
-                        .background(GreenSurface),
+                    modifier = Modifier.size(42.dp).clip(RoundedCornerShape(11.dp)).background(GreenSurface),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.QrCode, contentDescription = null, tint = GreenPrimary, modifier = Modifier.size(24.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("QR Terdeteksi", fontSize = 10.sp, color = TextSecondary)
+                    Text("Bin Terdeteksi", fontSize = 10.sp, color = TextSecondary)
                     Text(bin?.location ?: binId, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                }
-                Surface(shape = RoundedCornerShape(8.dp), color = StatusNormalBg) {
-                    Text(binId, fontSize = 10.sp, color = StatusNormal, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                 }
             }
 
             Spacer(Modifier.height(14.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(
-                    onClick = onReset,
-                    shape   = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(15.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text("Scan Lagi", fontSize = 13.sp)
+            when (pickupPhase) {
+                "loading" -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(color = GreenPrimary, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Mengambil lokasi & mencatat pickup...", fontSize = 13.sp, color = TextSecondary)
                 }
-                Button(
-                    onClick  = onNavigate,
-                    colors   = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
-                    shape    = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(15.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text("Detail Bin", fontSize = 13.sp)
+                "done" -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = StatusNormal, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(pickupMsg, fontSize = 13.sp, color = StatusNormal)
                 }
+                "error" -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = StatusCritical, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(pickupMsg, fontSize = 13.sp, color = StatusCritical)
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            Button(
+                onClick  = onReset,
+                enabled  = pickupPhase != "loading",
+                colors   = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
+                shape    = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(5.dp))
+                Text("Scan Lagi", fontSize = 13.sp)
             }
         }
     }

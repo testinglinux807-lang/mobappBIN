@@ -15,7 +15,9 @@ data class BinData(
     val gas: Double        = 0.0,   // gas sensor ppm (replaces temperature)
     val lat: Double        = -6.9175,
     val lng: Double        = 107.6191,
-    val alertText: String  = ""
+    val alertText: String  = "",
+    val online: Boolean    = true,  // device connectivity (API status "online"/"offline")
+    val areaId: String?    = null
 )
 
 data class PickupRoute(
@@ -30,12 +32,15 @@ data class PickupRoute(
 
 data class NotificationItem(
     val id: String,
-    val binId: String,
+    val binId: String,                 // display ID (nodeId, e.g. "BIN-042")
     val title: String,
     val message: String,
     val time: String,
     val type: BinStatus,
-    val isRead: Boolean = false
+    val isRead: Boolean = false,
+    val binRefId: String = binId,      // navigable bin _id used by getBinById
+    val rawType: String = "",          // tipe alert mentah (FULL_VOLUME/FULL_WEIGHT/...)
+    val createdAtRaw: String? = null   // ISO-8601 mentah, buat banding waktu vs pickup
 )
 
 object MockData {

@@ -36,7 +36,13 @@ data class ChangePasswordRequest(val oldPassword: String, val newPassword: Strin
 
 // ── Areas ─────────────────────────────────────────────────────────────────────
 
-data class ApiArea(val id: String, val name: String)
+data class ApiArea(
+    val id: String,
+    val name: String,
+    val createdAt: String? = null,
+    val _count: AreaCount? = null
+)
+data class AreaCount(val bins: Int = 0, val users: Int = 0)
 
 // ── Bins ──────────────────────────────────────────────────────────────────────
 
@@ -59,10 +65,11 @@ data class ApiBin(
     val lat: Double,
     val lng: Double,
     val areaId: String?,
-    val createdAt: String,
-    val status: String,       // "online" | "offline"
-    val lastSeen: String?,
-    val latest: BinLatest?
+    val area: ApiArea? = null,
+    val createdAt: String? = null,
+    val status: String? = null,   // "online" | "offline" — absent in create/update responses
+    val lastSeen: String? = null,
+    val latest: BinLatest? = null
 )
 
 data class ApiBinDetail(
@@ -72,6 +79,7 @@ data class ApiBinDetail(
     val lat: Double,
     val lng: Double,
     val areaId: String?,
+    val area: ApiArea? = null,
     val status: String,
     val lastSeen: String?,
     val latest: BinLatest?,
@@ -207,6 +215,81 @@ data class BinSingleResponse(
     val message: String,
     val data: ApiBin?
 )
+
+// ── Pickups ───────────────────────────────────────────────────────────────────
+
+data class CompletePickupRequest(val lat: Double? = null, val lng: Double? = null)
+
+data class ApiPickup(
+    val id: String,
+    val binId: String,
+    val petugasId: String,
+    val areaId: String?,
+    val alertId: String?,
+    val status: String,          // "MENUNGGU_SENSOR" | "SELESAI"
+    val completedAt: String,
+    val completedLat: Double?,
+    val completedLng: Double?,
+    val sensorConfirmedAt: String?,
+    val manualConfirmedAt: String? = null,
+    val createdAt: String,
+    val bin: PickupBinInfo?,
+    val petugas: PickupPetugasInfo?
+)
+
+data class PickupBinInfo(val nodeId: String, val location: String, val lat: Double, val lng: Double)
+data class PickupPetugasInfo(val id: String, val name: String, val email: String)
+
+data class PickupResponse(val success: Boolean, val message: String, val data: ApiPickup?)
+data class PickupsResponse(val success: Boolean, val data: List<ApiPickup>?, val pagination: Pagination?)
+
+// ── Schedules ───────────────────────────────────────────────────────────────
+
+data class ApiSchedule(
+    val id: String,
+    val petugasId: String,
+    val areaId: String?,
+    val date: String,            // ISO date
+    val startTime: String,       // "08.00"
+    val endTime: String,         // "10.00"
+    val truck: String?,
+    val binTarget: Int,
+    val note: String?,
+    val status: String,          // "PENDING" | "PROSES" | "SELESAI"
+    val createdAt: String,
+    val updatedAt: String,
+    val petugas: SchedulePetugas?,
+    val area: ScheduleArea?
+)
+
+data class SchedulePetugas(val id: String, val name: String, val email: String)
+data class ScheduleArea(val id: String, val name: String)
+
+data class CreateScheduleRequest(
+    val petugasId: String,
+    val date: String,
+    val startTime: String,
+    val endTime: String,
+    val areaId: String? = null,
+    val truck: String? = null,
+    val binTarget: Int = 0,
+    val note: String? = null
+)
+
+data class UpdateScheduleRequest(
+    val status: String? = null,
+    val petugasId: String? = null,
+    val areaId: String? = null,
+    val date: String? = null,
+    val startTime: String? = null,
+    val endTime: String? = null,
+    val truck: String? = null,
+    val binTarget: Int? = null,
+    val note: String? = null
+)
+
+data class ScheduleResponse(val success: Boolean, val message: String, val data: ApiSchedule?)
+data class SchedulesResponse(val success: Boolean, val data: List<ApiSchedule>?, val pagination: Pagination?)
 
 // ── Standard / Pagination ─────────────────────────────────────────────────────
 

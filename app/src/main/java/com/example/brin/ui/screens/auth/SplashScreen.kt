@@ -1,12 +1,10 @@
 package com.example.brin.ui.screens.auth
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,37 +15,34 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.brin.R
 import com.example.brin.data.UserRole
 import com.example.brin.data.repository.AuthRepository
-import com.example.brin.ui.theme.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import com.example.brin.ui.theme.GreenDark
+import com.example.brin.ui.theme.GreenPrimary
 
 @Composable
 fun SplashScreen(
     onAutoLogin: (name: String, role: UserRole) -> Unit,
     onNeedLogin: () -> Unit
 ) {
-    val context    = LocalContext.current
-    val logoScale  = remember { Animatable(0.4f) }
-    val logoAlpha  = remember { Animatable(0f) }
-    val textAlpha  = remember { Animatable(0f) }
-    val dotAlpha1  = remember { Animatable(0f) }
-    val dotAlpha2  = remember { Animatable(0f) }
-    val dotAlpha3  = remember { Animatable(0f) }
+    val context     = LocalContext.current
+    val contentAlpha = remember { Animatable(0f) }
+    val logoScale    = remember { Animatable(0.88f) }
+    val progress     = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
-        logoAlpha.animateTo(1f, tween(500))
-        logoScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
-        textAlpha.animateTo(1f, tween(400))
-        delay(300)
-        dotAlpha1.animateTo(1f, tween(200))
-        dotAlpha2.animateTo(1f, tween(200))
-        dotAlpha3.animateTo(1f, tween(200))
-        delay(600)
+        // Smooth, calm entrance — no bounce
+        launch { contentAlpha.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) }
+        launch { progress.animateTo(1f, tween(1400, easing = FastOutSlowInEasing)) }
+        logoScale.animateTo(1f, tween(900, easing = FastOutSlowInEasing))
+        delay(700)
 
         // Try restoring saved session
         val user = AuthRepository.restoreSession(context)
@@ -62,50 +57,63 @@ fun SplashScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(colors = listOf(GreenDark, GreenPrimary, GreenMedium))),
+            .background(Brush.verticalGradient(colors = listOf(GreenDark, GreenPrimary))),
         contentAlignment = Alignment.Center
     ) {
-        Box(modifier = Modifier.size(320.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.04f)).align(Alignment.Center))
-        Box(modifier = Modifier.size(220.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.05f)).align(Alignment.Center))
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.alpha(contentAlpha.value)
+        ) {
+            Image(
+                painterResource(R.drawable.logo_smartbin),
+                contentDescription = "Smart BIN logo",
+                modifier = Modifier.size(116.dp).scale(logoScale.value)
+            )
 
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Box(
-                modifier = Modifier
-                    .scale(logoScale.value).alpha(logoAlpha.value)
-                    .size(100.dp).clip(RoundedCornerShape(28.dp))
-                    .background(Color.White.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = Color.White, modifier = Modifier.size(58.dp))
-            }
+            Spacer(Modifier.height(20.dp))
 
-            Spacer(Modifier.height(24.dp))
-
-            Column(modifier = Modifier.alpha(textAlpha.value), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Smart BIN", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 1.sp)
-                Text("Sistem Pengelolaan Sampah", fontSize = 14.sp, color = Color.White.copy(alpha = 0.75f), textAlign = TextAlign.Center)
-                Spacer(Modifier.height(4.dp))
-                Surface(shape = RoundedCornerShape(20.dp), color = Color.White.copy(alpha = 0.15f)) {
-                    Text("BRIN", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 3.sp,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
-                }
-            }
-
-            Spacer(Modifier.height(60.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                LoadingDot(alpha = dotAlpha1.value)
-                LoadingDot(alpha = dotAlpha2.value)
-                LoadingDot(alpha = dotAlpha3.value)
-            }
+            Text(
+                "Smart BIN",
+                fontSize = 26.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                letterSpacing = 0.5.sp
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Sistem Pengelolaan Sampah Berbasis AI",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color.White.copy(alpha = 0.7f)
+            )
         }
 
-        Text("v1.0.0", fontSize = 11.sp, color = Color.White.copy(alpha = 0.4f),
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp).alpha(textAlpha.value))
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 44.dp)
+                .alpha(contentAlpha.value)
+        ) {
+            LinearProgressIndicator(
+                progress = { progress.value },
+                modifier = Modifier
+                    .width(140.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+                color = Color.White.copy(alpha = 0.9f),
+                trackColor = Color.White.copy(alpha = 0.18f),
+                gapSize = 0.dp,
+                drawStopIndicator = {}
+            )
+            Spacer(Modifier.height(18.dp))
+            Text(
+                "MADE BY BRIN",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White.copy(alpha = 0.55f),
+                letterSpacing = 4.sp
+            )
+        }
     }
-}
-
-@Composable
-private fun LoadingDot(alpha: Float) {
-    Box(modifier = Modifier.size(8.dp).alpha(alpha).clip(CircleShape).background(Color.White.copy(alpha = 0.8f)))
 }

@@ -72,7 +72,8 @@ fun ApiBin.toBinData(): BinData {
         id         = id,
         nodeId     = nodeId,
         location   = location,
-        area       = areaId ?: "",
+        area       = area?.name ?: areaId ?: "",
+        areaId     = areaId,
         capacity   = vol,
         status     = vol.toStatus(),
         lastUpdate = latest?.timestamp?.toRelativeTime() ?: "Tidak diketahui",
@@ -80,7 +81,8 @@ fun ApiBin.toBinData(): BinData {
         gas        = latest?.gas ?: 0.0,
         lat        = lat,
         lng        = lng,
-        alertText  = if (vol >= 90) "Segera dikosongkan" else if (vol >= 70) "Perlu dikosongkan" else ""
+        alertText  = if (vol >= 90) "Segera dikosongkan" else if (vol >= 70) "Perlu dikosongkan" else "",
+        online     = !status.equals("offline", ignoreCase = true)
     )
 }
 
@@ -90,7 +92,8 @@ fun ApiBinDetail.toBinData(): BinData {
         id         = id,
         nodeId     = nodeId,
         location   = location,
-        area       = areaId ?: "",
+        area       = area?.name ?: areaId ?: "",
+        areaId     = areaId,
         capacity   = vol,
         status     = vol.toStatus(),
         lastUpdate = latest?.timestamp?.toRelativeTime() ?: "Tidak diketahui",
@@ -98,7 +101,8 @@ fun ApiBinDetail.toBinData(): BinData {
         gas        = latest?.gas ?: 0.0,
         lat        = lat,
         lng        = lng,
-        alertText  = if (vol >= 90) "Segera dikosongkan" else if (vol >= 70) "Perlu dikosongkan" else ""
+        alertText  = if (vol >= 90) "Segera dikosongkan" else if (vol >= 70) "Perlu dikosongkan" else "",
+        online     = !status.equals("offline", ignoreCase = true)
     )
 }
 

@@ -8,10 +8,8 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
-// Change to your machine's IP when using a physical device (e.g. "http://192.168.1.x:3000/")
-const val BASE_URL = "http://192.168.1.67:3000/"
-const val WS_URL   = "ws://192.168.1.67:3000"
-
+const val BASE_URL = "http://192.168.1.34:3000/"
+const val WS_URL   = "ws://192.168.1.34:3000"
 
 object RetrofitClient {
 
@@ -43,5 +41,6 @@ object RetrofitClient {
 
     fun newWebSocketClient() = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
+        .pingInterval(20, TimeUnit.SECONDS)   // keep-alive so idle connections aren't dropped
         .build()
 }

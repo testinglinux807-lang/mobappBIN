@@ -78,6 +78,38 @@ interface ApiService {
     @DELETE("areas/{id}")
     suspend fun deleteArea(@Path("id") id: String): StandardResponse
 
+    // Pickups
+    @POST("pickups/{binId}/complete")
+    suspend fun completePickup(@Path("binId") binId: String, @Body body: CompletePickupRequest): PickupResponse
+
+    @GET("pickups")
+    suspend fun getPickups(@Query("page") page: Int = 1, @Query("limit") limit: Int = 50): PickupsResponse
+
+    @GET("pickups/{id}")
+    suspend fun getPickupById(@Path("id") id: String): PickupResponse
+
+    @POST("pickups/{id}/confirm")
+    suspend fun confirmPickup(@Path("id") id: String): PickupResponse
+
+    // Schedules
+    @GET("schedules")
+    suspend fun getSchedules(
+        @Query("date") date: String? = null,
+        @Query("status") status: String? = null,
+        @Query("petugasId") petugasId: String? = null,
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 100
+    ): SchedulesResponse
+
+    @POST("schedules")
+    suspend fun createSchedule(@Body body: CreateScheduleRequest): ScheduleResponse
+
+    @PUT("schedules/{id}")
+    suspend fun updateSchedule(@Path("id") id: String, @Body body: UpdateScheduleRequest): ScheduleResponse
+
+    @DELETE("schedules/{id}")
+    suspend fun deleteSchedule(@Path("id") id: String): StandardResponse
+
     // Alerts
     @GET("alerts")
     suspend fun getAlerts(

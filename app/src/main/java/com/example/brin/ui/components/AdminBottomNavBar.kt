@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.brin.data.repository.AlertRepository
+import com.example.brin.data.websocket.WebSocketManager
 import com.example.brin.ui.navigation.AdminScreen
 import com.example.brin.ui.theme.*
 
@@ -31,12 +32,14 @@ fun AdminBottomNavBar(navController: NavController) {
     val currentRoute   = backStackEntry?.destination?.route
     var unreadNotif    by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { unreadNotif = AlertRepository.getUnresolvedCount() }
+    // Refresh badge tiap ada event WebSocket (alert baru / resolved / pickup dikonfirmasi),
+    // supaya badge ikut bersih setelah konfirmasi manual pickup nge-resolve alert.
+    LaunchedEffect(Unit) { WebSocketManager.events.collect { unreadNotif = AlertRepository.getUnresolvedCount() } }
 
     val items = listOf(
         NavItem(AdminScreen.Home.route,          Icons.Default.Dashboard,     "Dashboard"),
         NavItem(AdminScreen.Map.route,           Icons.Default.Explore,       "Explore"),
         NavItem(AdminScreen.Notifications.route, Icons.Default.Notifications, "Notifikasi", unreadNotif),
-        NavItem(AdminScreen.Schedule.route,      Icons.Default.CalendarMonth, "Jadwal"),
         NavItem(AdminScreen.Settings.route,      Icons.Default.Person,        "Profil"),
     )
 
