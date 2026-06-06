@@ -157,6 +157,7 @@ fun PetugasPickupScreen(onBinClick: (String) -> Unit) {
     }
     val needPickup = remember(bins, pickups, openFullAlertAt) {
         bins.filter { bin ->
+            if (bin.status == BinStatus.NORMAL) return@filter false  // guard alert basi di bin kosong
             val openAt = openFullAlertAt[bin.id] ?: return@filter false
             pickups.none { it.binId == bin.id && parseInstantMs(it.completedAt) >= openAt }
         }

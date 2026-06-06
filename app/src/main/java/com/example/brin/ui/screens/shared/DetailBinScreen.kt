@@ -167,7 +167,7 @@ fun DetailBinScreen(
         }
 
         Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 80.dp)) {
-            if (hasOpenAlert) {
+            if (hasOpenAlert && currentBin.status != BinStatus.NORMAL) {
                 Spacer(Modifier.height(16.dp))
                 Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(CardBg)) {
                     Row(modifier = Modifier.height(IntrinsicSize.Min)) {

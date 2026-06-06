@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
+import com.example.brin.data.BinData
 import com.example.brin.data.BinStatus
 import com.example.brin.data.NotificationItem
 import com.example.brin.data.api.ApiPickup
@@ -53,15 +54,13 @@ fun NotificationsScreen(
     var isLoading     by remember { mutableStateOf(true) }
     var resolvingIds  by remember { mutableStateOf(setOf<String>()) }
     var confirmingPickupIds by remember { mutableStateOf(setOf<String>()) }
-    var areaBinIds    by remember { mutableStateOf<Set<String>?>(null) }   // null = tanpa filter area
+    var bins          by remember { mutableStateOf<List<BinData>>(emptyList()) }
     val tabs = listOf("Semua", "Kritis", "Pickup", "Info")
 
     LaunchedEffect(Unit) {
-        // Mode petugas: kumpulkan id bin di area-nya buat nyaring alert.
-        if (areaScopeId != null) {
-            BinRepository.getBins().onSuccess { bins -> areaBinIds = bins.filter { it.areaId == areaScopeId }.map { it.id }.toSet() }
-        }
-        AlertRepository.getAlerts().onSuccess { allAlerts = it }
+        BinRepository.getBins().onSuccess { bins = it }
+        // Hanya alert yang belum di-resolve — yang sudah beres tidak ditampilkan.
+        AlertRepository.getAlerts(resolved = false).onSuccess { allAlerts = it }
         PickupRepository.getPickups().onSuccess { list ->
             pickups = list
                 .filter { (it.status == "SELESAI" || it.status == "MENUNGGU_SENSOR") && (areaScopeId == null || it.areaId == areaScopeId) }
@@ -102,17 +101,26 @@ fun NotificationsScreen(
                     }
                 }
                 is WsEvent.AlertResolved -> {
-                    allAlerts = allAlerts.map { if (it.id == event.alertId) it.copy(isRead = true) else it }
+                    allAlerts = allAlerts.filter { it.id != event.alertId }   // alert beres → hilang dari notif
                 }
                 else -> Unit
             }
         }
     }
 
-    // Mode petugas: cuma alert yang bin-nya ada di area dia
-    val scopedAlerts = remember(allAlerts, areaBinIds, areaScopeId) {
-        if (areaScopeId == null) allAlerts
-        else allAlerts.filter { it.binRefId in (areaBinIds ?: emptySet()) }
+    val areaBinIds = remember(bins, areaScopeId) {
+        if (areaScopeId == null) null else bins.filter { it.areaId == areaScopeId }.map { it.id }.toSet()
+    }
+    val nonNormalBinIds = remember(bins) { bins.filter { it.status != BinStatus.NORMAL }.map { it.id }.toSet() }
+    // Hanya alert AKTIF: belum di-resolve, dan untuk alert PENUH binnya masih non-normal
+    // (buang alert basi dari bin yang sudah kosong). Alert non-penuh (baterai/gas) tak di-guard volume.
+    val scopedAlerts = remember(allAlerts, areaBinIds, nonNormalBinIds, areaScopeId) {
+        allAlerts.filter { alert ->
+            if (alert.isRead) return@filter false
+            val isFull = alert.rawType == "FULL_VOLUME" || alert.rawType == "FULL_WEIGHT"
+            if (isFull && alert.binRefId !in nonNormalBinIds) return@filter false
+            areaScopeId == null || alert.binRefId in (areaBinIds ?: emptySet())
+        }
     }
     val filtered = remember(selectedTab, scopedAlerts) {
         when (selectedTab) {
@@ -203,7 +211,7 @@ fun NotificationsScreen(
                             resolvingIds = resolvingIds + item.id
                             scope.launch {
                                 AlertRepository.resolveAlert(item.id).onSuccess {
-                                    allAlerts = allAlerts.map { a -> if (a.id == item.id) a.copy(isRead = true) else a }
+                                    allAlerts = allAlerts.filter { it.id != item.id }   // hilang dari list begitu beres
                                 }
                                 resolvingIds = resolvingIds - item.id
                             }

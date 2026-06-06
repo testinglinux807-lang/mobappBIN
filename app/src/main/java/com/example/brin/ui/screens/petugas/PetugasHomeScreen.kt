@@ -59,6 +59,7 @@ fun PetugasHomeScreen(onBinClick: (String) -> Unit = {}, onNotifClick: () -> Uni
         .groupBy { it.binRefId }
         .mapValues { (_, list) -> list.minOf { parseInstantMs(it.createdAtRaw) } }
     val needAttention = bins.filter { bin ->
+        if (bin.status == BinStatus.NORMAL) return@filter false  // guard alert basi di bin kosong
         val openAt = openFullAlertAt[bin.id] ?: return@filter false
         pickups.none { it.binId == bin.id && parseInstantMs(it.completedAt) >= openAt }
     }

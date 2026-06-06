@@ -92,7 +92,9 @@ fun HomeScreen(onBinClick: (String) -> Unit, onRouteClick: (String) -> Unit = {}
         }
     }
 
-    val criticals  = bins.filter { it.id in openAlertBinIds }
+    // Tampilkan hanya bin yang punya alert aktif DAN volumenya memang masih non-normal —
+    // mencegah alert basi (bin sudah 0% tapi alert belum ter-resolve) muncul sebagai "kritis".
+    val criticals  = bins.filter { it.id in openAlertBinIds && it.status != BinStatus.NORMAL }
     val today      = LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy", Locale.forLanguageTag("id")))
     val greeting   = when (LocalDateTime.now().hour) { in 0..10 -> "Selamat pagi,"; in 11..14 -> "Selamat siang,"; in 15..17 -> "Selamat sore,"; else -> "Selamat malam," }
 

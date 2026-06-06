@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.example.brin.data.BinStatus
 import com.example.brin.data.local.AppState
 import com.example.brin.data.local.NotifSeenStorage
 import com.example.brin.data.repository.AlertRepository
@@ -54,6 +55,7 @@ fun PetugasBottomNavBar(navController: NavController) {
             .groupBy { it.binRefId }
             .mapValues { (_, list) -> list.minOf { ms(it.createdAtRaw) } }
         needPickupCount = bins.count { bin ->
+            if (bin.status == BinStatus.NORMAL) return@count false  // guard alert basi di bin kosong
             val openAt = openFullAlertAt[bin.id]
             openAt != null && pickups.none { it.binId == bin.id && ms(it.completedAt) >= openAt }
         }
