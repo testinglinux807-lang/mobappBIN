@@ -1,6 +1,8 @@
 package com.example.brin.ui.screens.shared
 
+import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,12 +35,10 @@ import com.example.brin.data.BinStatus
 import com.example.brin.data.local.AppState
 import com.example.brin.data.repository.AlertRepository
 import com.example.brin.data.repository.BinRepository
-import com.example.brin.data.repository.PickupRepository
 import com.example.brin.data.websocket.WebSocketManager
 import com.example.brin.data.websocket.WsEvent
 import com.example.brin.ui.theme.*
-import com.example.brin.util.LocationHelper
-import androidx.compose.ui.platform.LocalContext
+import com.example.brin.util.toUserMessage
 import kotlinx.coroutines.launch
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -58,10 +59,6 @@ fun DetailBinScreen(
     var showDelDialog     by remember { mutableStateOf(false) }
     var isDeleting        by remember { mutableStateOf(false) }
     var deleteError       by remember { mutableStateOf<String?>(null) }
-    var showPickupDialog  by remember { mutableStateOf(false) }
-    var isCompletingPickup by remember { mutableStateOf(false) }
-    var pickupError       by remember { mutableStateOf<String?>(null) }
-    var pickupSuccess     by remember { mutableStateOf(false) }
     // Status alert dari ALERT (bukan volume), supaya konfirmasi manual yang me-resolve
     // alert langsung menghilangkan banner peringatan di sini.
     var hasOpenAlert  by remember { mutableStateOf(false) }
@@ -84,7 +81,7 @@ fun DetailBinScreen(
                 is WsEvent.AlertNew -> if (event.binId == binId && (event.type == "FULL_VOLUME" || event.type == "FULL_WEIGHT")) {
                     hasOpenAlert = true; openAlertMsg = event.message
                 }
-                is WsEvent.BinUpdate -> if (event.binId == binId) bin = bin?.copy(
+                is WsEvent.BinUpdate -> if (event.binId == binId || event.nodeId == bin?.nodeId) bin = bin?.copy(
                     capacity   = event.volume,
                     battery    = event.battery,
                     gas        = event.gas,
@@ -97,6 +94,17 @@ fun DetailBinScreen(
     }
 
     val currentBin = bin  // local snapshot — avoids smart-cast issue on delegated property
+
+    // Buka navigasi ke lokasi bin via Google Maps (fallback ke aplikasi peta lain).
+    val openNavigation: (BinData) -> Unit = { b ->
+        val navUri    = Uri.parse("google.navigation:q=${b.lat},${b.lng}")
+        val navIntent = Intent(Intent.ACTION_VIEW, navUri).setPackage("com.google.android.apps.maps")
+        val launched  = runCatching { context.startActivity(navIntent); true }.getOrDefault(false)
+        if (!launched) {
+            val geoUri = Uri.parse("geo:${b.lat},${b.lng}?q=${b.lat},${b.lng}(${b.nodeId})")
+            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, geoUri)) }
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().background(AppBackground)) {
         val sColor = if (currentBin != null) statusColor(currentBin.status) else GreenPrimary
@@ -166,7 +174,7 @@ fun DetailBinScreen(
             return
         }
 
-        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 80.dp)) {
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 80.dp)) {
             if (hasOpenAlert && currentBin.status != BinStatus.NORMAL) {
                 Spacer(Modifier.height(16.dp))
                 Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(CardBg)) {
@@ -207,77 +215,24 @@ fun DetailBinScreen(
             Spacer(Modifier.height(8.dp))
             Surface(shape = RoundedCornerShape(12.dp), color = CardBg, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 Column {
+                    // Aksi admin (QR/Edit/Hapus). Petugas: detail view-only — pickup dilakukan
+                    // lewat tab Pickup / Scan QR, bukan dari sini (menghindari desync).
                     if (isAdmin) {
                         FlatAction("Generate QR", GreenPrimary, bold = true) { showQrDialog = true }
-                    } else {
-                        FlatAction("Pickup Selesai", StatusWarning, bold = true) { showPickupDialog = true }
-                    }
-                    if (isAdmin && onEdit != null) {
+                        if (onEdit != null) {
+                            HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                            FlatAction("Edit Bin", TextPrimary) { onEdit() }
+                        }
+                        if (onDeleted != null) {
+                            HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                            FlatAction("Hapus Bin", StatusCritical) { showDelDialog = true }
+                        }
                         HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
-                        FlatAction("Edit Bin", TextPrimary) { onEdit() }
                     }
-                    if (isAdmin && onDeleted != null) {
-                        HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
-                        FlatAction("Hapus Bin", StatusCritical) { showDelDialog = true }
-                    }
-                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
-                    FlatAction("Navigasi ke Lokasi", TextPrimary) { }
+                    FlatAction("Navigasi ke Lokasi", TextPrimary) { openNavigation(currentBin) }
                 }
             }
         }
-    }
-
-    if (showPickupDialog && currentBin != null) {
-        AlertDialog(
-            onDismissRequest = { if (!isCompletingPickup) { showPickupDialog = false; pickupError = null; pickupSuccess = false } },
-            containerColor   = CardBg,
-            title = { Text("Pickup Selesai?", color = TextPrimary, fontWeight = FontWeight.Bold) },
-            text  = {
-                if (pickupSuccess) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = StatusNormal, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Pickup berhasil dicatat. Menunggu konfirmasi sensor.", color = StatusNormal, fontSize = 13.sp)
-                    }
-                } else {
-                    Column {
-                        Text("Konfirmasi bahwa pickup bin ${currentBin.nodeId} (${currentBin.location}) telah selesai dilakukan.", color = TextSecondary, fontSize = 14.sp)
-                        pickupError?.let { Spacer(Modifier.height(8.dp)); Text(it, color = StatusCritical, fontSize = 13.sp) }
-                    }
-                }
-            },
-            confirmButton = {
-                if (pickupSuccess) {
-                    Button(onClick = { showPickupDialog = false; pickupSuccess = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)) { Text("Tutup") }
-                } else {
-                    Button(
-                        onClick = {
-                            isCompletingPickup = true; pickupError = null
-                            scope.launch {
-                                val loc = LocationHelper.getCurrentLocation(context)
-                                PickupRepository.completePickup(currentBin.id, loc?.lat, loc?.lng)
-                                    .onSuccess { pickupSuccess = true }
-                                    .onFailure { pickupError = it.message ?: "Gagal mencatat pickup" }
-                                isCompletingPickup = false
-                            }
-                        },
-                        enabled = !isCompletingPickup,
-                        colors  = ButtonDefaults.buttonColors(containerColor = StatusWarning)
-                    ) {
-                        if (isCompletingPickup) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        else Text("Konfirmasi")
-                    }
-                }
-            },
-            dismissButton = {
-                if (!pickupSuccess) {
-                    TextButton(onClick = { showPickupDialog = false; pickupError = null }, enabled = !isCompletingPickup) {
-                        Text("Batal", color = TextSecondary)
-                    }
-                }
-            }
-        )
     }
 
     if (showQrDialog && currentBin != null) {
@@ -306,7 +261,7 @@ fun DetailBinScreen(
                         scope.launch {
                             BinRepository.deleteBin(currentBin.id)
                                 .onSuccess { onDeleted?.invoke() }
-                                .onFailure { deleteError = it.message ?: "Gagal menghapus"; isDeleting = false }
+                                .onFailure { deleteError = it.toUserMessage("Gagal menghapus bin. Coba lagi."); isDeleting = false }
                         }
                     },
                     enabled = !isDeleting,
