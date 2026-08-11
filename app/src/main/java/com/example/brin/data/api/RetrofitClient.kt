@@ -7,9 +7,9 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
-
-const val BASE_URL = "http://192.168.1.34:3000/"
-const val WS_URL   = "ws://192.168.1.34:3000"
+//btw claude --resume c3706514-078f-4686-9755-5dbd5ecb7f85
+const val BASE_URL = "https://smartbin.sbs"
+const val WS_URL   = "wss://smartbin.sbs"
 
 object RetrofitClient {
 
