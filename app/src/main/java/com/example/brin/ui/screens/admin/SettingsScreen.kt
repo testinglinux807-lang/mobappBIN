@@ -24,17 +24,35 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.example.brin.data.local.AppState
+import com.example.brin.data.repository.AreaRepository
 import com.example.brin.data.repository.AuthRepository
+import com.example.brin.data.repository.BinRepository
+import com.example.brin.data.repository.UserRepository
 import com.example.brin.ui.theme.*
+import com.example.brin.util.toUserMessage
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(onLogout: () -> Unit = {}, onUsers: () -> Unit = {}, onAreas: () -> Unit = {}) {
+fun SettingsScreen(onLogout: () -> Unit = {}, onUsers: () -> Unit = {}, onAreas: () -> Unit = {}, onBins: () -> Unit = {}, onHelp: () -> Unit = {}, onDevices: () -> Unit = {}) {
     val scope         = rememberCoroutineScope()
     val context       = LocalContext.current
     var notifEnabled  by remember { mutableStateOf(true) }
     var criticalAlert by remember { mutableStateOf(true) }
     var autoRefresh   by remember { mutableStateOf(true) }
+
+    // Statistik ringkas dari backend (menggantikan angka dummy).
+    var totalBin      by remember { mutableIntStateOf(0) }
+    var totalPetugas  by remember { mutableIntStateOf(0) }
+    var totalZona     by remember { mutableIntStateOf(0) }
+    var onlinePct     by remember { mutableStateOf("-") }
+    LaunchedEffect(Unit) {
+        BinRepository.getBins().onSuccess { bins ->
+            totalBin = bins.size
+            onlinePct = if (bins.isNotEmpty()) "${bins.count { it.online } * 100 / bins.size}%" else "-"
+        }
+        UserRepository.getUsers().onSuccess { users -> totalPetugas = users.count { it.role == "PETUGAS" } }
+        AreaRepository.getAreas().onSuccess { totalZona = it.size }
+    }
 
     // Change password dialog state
     var showPassDialog by remember { mutableStateOf(false) }
@@ -61,17 +79,17 @@ fun SettingsScreen(onLogout: () -> Unit = {}, onUsers: () -> Unit = {}, onAreas:
             HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
             Spacer(Modifier.height(18.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
-                SettingStat("248", "Total Bin")
+                SettingStat("$totalBin", "Total Bin")
                 Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color.White.copy(alpha = 0.18f)))
-                SettingStat("12", "Petugas")
+                SettingStat("$totalPetugas", "Petugas")
                 Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color.White.copy(alpha = 0.18f)))
-                SettingStat("6", "Zona Aktif")
+                SettingStat("$totalZona", "Zona Aktif")
                 Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color.White.copy(alpha = 0.18f)))
-                SettingStat("99%", "Uptime")
+                SettingStat(onlinePct, "Bin Online")
             }
         }
 
-        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 80.dp)) {
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Spacer(Modifier.height(20.dp))
             SectionLabel("Notifikasi")
             Surface(shape = RoundedCornerShape(12.dp), color = CardBg, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -92,10 +110,10 @@ fun SettingsScreen(onLogout: () -> Unit = {}, onUsers: () -> Unit = {}, onAreas:
                     HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
                     MenuRow(Icons.Default.LocationOn,    "Manajemen Zona",    onClick = onAreas)
                     HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
-                    MenuRow(Icons.Default.DeleteOutline, "Manajemen Bin")
+                    MenuRow(Icons.Default.DeleteOutline, "Manajemen Bin", onClick = onBins)
                     HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
-                    MenuRow(Icons.Default.Download,      "Export Laporan")
-                }
+                    MenuRow(Icons.Default.Smartphone, "Remote Control Pi", onClick = onDevices)
+}
             }
 
             Spacer(Modifier.height(20.dp))
@@ -107,11 +125,7 @@ fun SettingsScreen(onLogout: () -> Unit = {}, onUsers: () -> Unit = {}, onAreas:
             Spacer(Modifier.height(20.dp))
             SectionLabel("Lainnya")
             Surface(shape = RoundedCornerShape(12.dp), color = CardBg, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                Column {
-                    MenuRow(Icons.AutoMirrored.Filled.Help, "Bantuan & Dukungan")
-                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
-                    MenuRow(Icons.Default.Info, "Tentang Aplikasi")
-                }
+                MenuRow(Icons.AutoMirrored.Filled.Help, "Bantuan & Dukungan", onClick = onHelp)
             }
 
             Spacer(Modifier.height(20.dp))
@@ -168,7 +182,12 @@ fun SettingsScreen(onLogout: () -> Unit = {}, onUsers: () -> Unit = {}, onAreas:
                             scope.launch {
                                 AuthRepository.changePassword(oldPass, newPass)
                                     .onSuccess { passSuccess = true; oldPass = ""; newPass = ""; confirmPass = "" }
-                                    .onFailure { passError = it.message ?: "Gagal mengubah password" }
+                                    .onFailure {
+                                        passError = it.toUserMessage(
+                                            fallback = "Gagal mengubah password. Coba lagi.",
+                                            on401    = "Password lama yang kamu masukkan salah."
+                                        )
+                                    }
                                 isSavingPass = false
                             }
                         },

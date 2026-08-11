@@ -9,7 +9,9 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -32,12 +34,15 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.brin.ui.components.PetugasBottomNavBar
 import com.example.brin.ui.screens.petugas.PetugasHomeScreen
+import com.example.brin.ui.screens.petugas.PetugasPengaturanScreen
 import com.example.brin.ui.screens.petugas.PetugasPickupScreen
 import com.example.brin.ui.screens.petugas.PetugasProfileScreen
+import com.example.brin.ui.screens.petugas.PetugasRiwayatScreen
 import com.example.brin.ui.screens.petugas.PetugasScanScreen
 import com.example.brin.ui.screens.admin.NotificationsScreen
 import com.example.brin.ui.screens.shared.DetailBinScreen
 import com.example.brin.ui.screens.shared.DetailRuteScreen
+import com.example.brin.ui.screens.shared.PanduanScreen
 
 sealed class PetugasScreen(val route: String) {
     object Home    : PetugasScreen("petugas_home")
@@ -51,6 +56,9 @@ sealed class PetugasScreen(val route: String) {
     object DetailBin : PetugasScreen("petugas_detail_bin/{binId}") {
         fun go(binId: String) = "petugas_detail_bin/$binId"
     }
+    object Panduan : PetugasScreen("petugas_panduan")
+    object Riwayat : PetugasScreen("petugas_riwayat")
+    object Pengaturan : PetugasScreen("petugas_pengaturan")
 }
 
 val petugasBottomNavRoutes = listOf(
@@ -101,10 +109,14 @@ fun PetugasNavHost(onLogout: () -> Unit) {
     }
 
     Scaffold(
-        modifier  = Modifier.fillMaxSize(),
+        modifier     = Modifier.fillMaxSize(),
+        // Scaffold jangan ikut-ikutan add nav bar padding sendiri — biar bottomBar
+        // (yang udah punya navigationBarsPadding) yang pegang. Kalau tidak, padding
+        // dobel dan layar jadi kegedean.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = { if (showBottom) PetugasBottomNavBar(navController) }
-    ) { _ ->
-        Box(modifier = Modifier.fillMaxSize()) {
+    ) { inner ->
+        Box(modifier = Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
             NavHost(
                 navController    = navController,
                 startDestination = PetugasScreen.Home.route,
@@ -139,11 +151,40 @@ fun PetugasNavHost(onLogout: () -> Unit) {
                     )
                 }
                 composable(PetugasScreen.Profile.route) {
-                    PetugasProfileScreen(onLogout = {
-                        scope.launch { AuthRepository.logout(context) }
-                        WebSocketManager.disconnect()
-                        onLogout()
-                    })
+                    PetugasProfileScreen(
+                        onLogout = {
+                            scope.launch { AuthRepository.logout(context) }
+                            WebSocketManager.disconnect()
+                            onLogout()
+                        },
+                        onHelp = { navController.navigate(PetugasScreen.Panduan.route) },
+                        onHistory = { navController.navigate(PetugasScreen.Riwayat.route) },
+                        onSettings = { navController.navigate(PetugasScreen.Pengaturan.route) }
+                    )
+                }
+                composable(
+                    route            = PetugasScreen.Panduan.route,
+                    enterTransition  = { slideInHorizontally(tween(350)) { it } + fadeIn(tween(350)) },
+                    exitTransition   = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(300)) },
+                    popExitTransition = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(300)) }
+                ) {
+                    PanduanScreen(onBack = { navController.popBackStack() })
+                }
+                composable(
+                    route            = PetugasScreen.Riwayat.route,
+                    enterTransition  = { slideInHorizontally(tween(350)) { it } + fadeIn(tween(350)) },
+                    exitTransition   = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(300)) },
+                    popExitTransition = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(300)) }
+                ) {
+                    PetugasRiwayatScreen(onBack = { navController.popBackStack() })
+                }
+                composable(
+                    route            = PetugasScreen.Pengaturan.route,
+                    enterTransition  = { slideInHorizontally(tween(350)) { it } + fadeIn(tween(350)) },
+                    exitTransition   = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(300)) },
+                    popExitTransition = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(300)) }
+                ) {
+                    PetugasPengaturanScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     route            = PetugasScreen.DetailRute.route,

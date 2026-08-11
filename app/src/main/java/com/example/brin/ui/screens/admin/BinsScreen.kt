@@ -3,7 +3,6 @@ package com.example.brin.ui.screens.admin
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -13,49 +12,50 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.brin.data.api.ApiUser
-import com.example.brin.data.repository.UserRepository
+import com.example.brin.data.BinData
+import com.example.brin.data.repository.BinRepository
+import com.example.brin.ui.screens.shared.BinOnlineDot
+import com.example.brin.ui.screens.shared.BinStatusBadge
+import com.example.brin.ui.screens.shared.statusColor
 import com.example.brin.ui.theme.*
 import com.example.brin.util.toUserMessage
 import kotlinx.coroutines.launch
 
 @Composable
-fun UsersScreen(
+fun BinsScreen(
     onBack: () -> Unit,
     onAdd: () -> Unit,
     onEdit: (String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    var users     by remember { mutableStateOf<List<ApiUser>>(emptyList()) }
+    var bins      by remember { mutableStateOf<List<BinData>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMsg  by remember { mutableStateOf<String?>(null) }
-    var deleteTarget  by remember { mutableStateOf<ApiUser?>(null) }
-    var isDeleting    by remember { mutableStateOf(false) }
-    var deleteError   by remember { mutableStateOf<String?>(null) }
+    var deleteTarget by remember { mutableStateOf<BinData?>(null) }
+    var isDeleting   by remember { mutableStateOf(false) }
+    var deleteError  by remember { mutableStateOf<String?>(null) }
 
-    fun loadUsers() {
+    fun loadBins() {
         isLoading = true; errorMsg = null
         scope.launch {
-            UserRepository.getUsers()
-                .onSuccess { users = it }
-                .onFailure { errorMsg = it.toUserMessage("Gagal memuat daftar pengguna.") }
+            BinRepository.getBins()
+                .onSuccess { bins = it }
+                .onFailure { errorMsg = it.toUserMessage("Gagal memuat daftar bin.") }
             isLoading = false
         }
     }
 
-    LaunchedEffect(Unit) { loadUsers() }
+    LaunchedEffect(Unit) { loadBins() }
 
     Column(modifier = Modifier.fillMaxSize().background(AppBackground)) {
-        // Header
         Box(modifier = Modifier.fillMaxWidth().background(GreenDark).statusBarsPadding()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = Color.White) }
-                Text("Manajemen Pengguna", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(start = 4.dp))
+                Text("Manajemen Bin", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(start = 4.dp))
             }
         }
 
@@ -68,17 +68,18 @@ fun UsersScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(errorMsg!!, color = StatusCritical, fontSize = 13.sp)
                         Spacer(Modifier.height(12.dp))
-                        Button(onClick = { loadUsers() }, colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)) { Text("Coba Lagi") }
+                        Button(onClick = { loadBins() }, colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)) { Text("Coba Lagi") }
                     }
                 }
                 else -> Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-                    if (users.isEmpty()) {
+                    if (bins.isEmpty()) {
                         Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
-                            Text("Belum ada pengguna.", color = TextHint, fontSize = 13.sp)
+                            Text("Belum ada bin.", color = TextHint, fontSize = 13.sp)
                         }
                     } else {
-                        users.forEach { user ->
-                            UserCard(user = user, onEdit = { onEdit(user.id) }, onDelete = { deleteTarget = user })
+                        Text("${bins.size} bin terdaftar", fontSize = 12.sp, color = TextHint, modifier = Modifier.padding(bottom = 10.dp))
+                        bins.forEach { bin ->
+                            BinManageCard(bin = bin, onEdit = { onEdit(bin.id) }, onDelete = { deleteTarget = bin })
                             Spacer(Modifier.height(10.dp))
                         }
                     }
@@ -89,19 +90,18 @@ fun UsersScreen(
                 onClick = onAdd,
                 containerColor = GreenPrimary, contentColor = Color.White,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)
-            ) { Icon(Icons.Default.Add, contentDescription = "Tambah Pengguna") }
+            ) { Icon(Icons.Default.Add, contentDescription = "Tambah Bin") }
         }
     }
 
-    // Delete confirmation dialog
-    deleteTarget?.let { user ->
+    deleteTarget?.let { bin ->
         AlertDialog(
             onDismissRequest = { if (!isDeleting) { deleteTarget = null; deleteError = null } },
             containerColor   = CardBg,
-            title = { Text("Hapus Pengguna?", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            title = { Text("Hapus Bin?", color = TextPrimary, fontWeight = FontWeight.Bold) },
             text  = {
                 Column {
-                    Text("${user.name} (${user.email}) akan dihapus secara permanen.", color = TextSecondary, fontSize = 14.sp)
+                    Text("Bin ${bin.nodeId} (${bin.location}) akan dihapus secara permanen.", color = TextSecondary, fontSize = 14.sp)
                     deleteError?.let { Spacer(Modifier.height(8.dp)); Text(it, color = StatusCritical, fontSize = 13.sp) }
                 }
             },
@@ -110,9 +110,9 @@ fun UsersScreen(
                     onClick = {
                         isDeleting = true; deleteError = null
                         scope.launch {
-                            UserRepository.deleteUser(user.id)
-                                .onSuccess { users = users.filter { it.id != user.id }; deleteTarget = null }
-                                .onFailure { deleteError = it.toUserMessage("Gagal menghapus pengguna. Coba lagi."); isDeleting = false }
+                            BinRepository.deleteBin(bin.id)
+                                .onSuccess { bins = bins.filter { it.id != bin.id }; deleteTarget = null }
+                                .onFailure { deleteError = it.toUserMessage("Gagal menghapus bin. Coba lagi."); isDeleting = false }
                             isDeleting = false
                         }
                     },
@@ -133,26 +133,25 @@ fun UsersScreen(
 }
 
 @Composable
-private fun UserCard(user: ApiUser, onEdit: () -> Unit, onDelete: () -> Unit) {
-    val roleColor = if (user.role == "ADMIN") Color(0xFF1976D2) else GreenPrimary
-    val roleBg    = if (user.role == "ADMIN") Color(0xFF1976D2).copy(alpha = 0.12f) else GreenPrimary.copy(alpha = 0.12f)
-
+private fun BinManageCard(bin: BinData, onEdit: () -> Unit, onDelete: () -> Unit) {
     Surface(shape = RoundedCornerShape(12.dp), color = CardBg, modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(42.dp).clip(CircleShape).background(GreenPrimary.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                Text(user.name.firstOrNull()?.uppercase() ?: "?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = GreenPrimary)
-            }
-            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(user.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                Text(user.email, fontSize = 12.sp, color = TextSecondary)
-                if (user.area != null) {
-                    Spacer(Modifier.height(2.dp))
-                    Text("Area: ${user.area.name}", fontSize = 11.sp, color = TextHint)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BinOnlineDot(bin.online)
+                    Spacer(Modifier.width(6.dp))
+                    Text(bin.nodeId, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                 }
-                Spacer(Modifier.height(5.dp))
-                Surface(shape = RoundedCornerShape(6.dp), color = roleBg) {
-                    Text(user.role, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = roleColor, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                Text(bin.location, fontSize = 12.sp, color = TextSecondary)
+                if (bin.area.isNotEmpty()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text("Area: ${bin.area}", fontSize = 11.sp, color = TextHint)
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BinStatusBadge(bin.status)
+                    Spacer(Modifier.width(8.dp))
+                    Text("${bin.capacity}%", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = statusColor(bin.status))
                 }
             }
             IconButton(onClick = onEdit)   { Icon(Icons.Default.Edit,   contentDescription = "Edit",  tint = TextHint, modifier = Modifier.size(20.dp)) }

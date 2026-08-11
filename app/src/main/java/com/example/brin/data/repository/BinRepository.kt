@@ -10,6 +10,9 @@ import com.example.brin.data.api.ThresholdRequest
 import com.example.brin.data.api.UpdateBinRequest
 import com.example.brin.data.BinData
 import com.example.brin.data.BinStatus
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -20,13 +23,39 @@ object BinRepository {
     suspend fun getBins(): Result<List<BinData>> = runCatching {
         val resp = RetrofitClient.api.getBins()
         if (!resp.success) error(resp.message)
-        resp.data.orEmpty().map { it.toBinData() }
+        // BE balikin latest = null untuk bin stale/offline → gas/volume tampil 0 di
+        // dashboard. Ambil pembacaan terakhir dari history (paralel) sebagai fallback.
+        coroutineScope {
+            resp.data.orEmpty().map { apiBin ->
+                async { apiBin.toBinData().withHistoryFallback(apiBin.latest == null, apiBin.id) }
+            }.awaitAll()
+        }
     }
 
     suspend fun getBinById(id: String): Result<BinData> = runCatching {
         val resp = RetrofitClient.api.getBinById(id)
         if (!resp.success || resp.data == null) error(resp.message)
-        resp.data.toBinData()
+        // BE mengembalikan latest = null saat bin offline/stale, jadi gas/volume
+        // tampil 0. Ambil pembacaan terakhir dari history supaya nilai terakhir
+        // yang diketahui tetap tampil (bukan 0 yang menyesatkan).
+        resp.data.toBinData().withHistoryFallback(resp.data.latest == null, id)
+    }
+
+    // Isi gas/volume/battery dari pembacaan history terakhir bila BE mengembalikan
+    // latest = null (bin stale/offline). Aman gagal — kalau history kosong/error,
+    // BinData asli (nilai 0) tetap dikembalikan.
+    private suspend fun BinData.withHistoryFallback(needsFallback: Boolean, id: String): BinData {
+        if (!needsFallback) return this
+        val log = runCatching {
+            RetrofitClient.api.getBinHistory(id, page = 1, limit = 1).data?.firstOrNull()
+        }.getOrNull() ?: return this
+        return copy(
+            capacity   = log.volume,
+            gas        = log.gas,
+            battery    = log.battery,
+            lastUpdate = log.createdAt.toRelativeTime(),
+            status     = log.volume.toStatus()
+        )
     }
 
     suspend fun getOptimalRoute(lat: Double, lng: Double): Result<OptimalRouteData> = runCatching {

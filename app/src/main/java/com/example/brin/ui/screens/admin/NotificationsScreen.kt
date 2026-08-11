@@ -176,7 +176,7 @@ fun NotificationsScreen(
 
         Column(
             modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())
-                .padding(16.dp).padding(bottom = 80.dp),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             val showPickups = showPickupCards && (selectedTab == 0 || selectedTab == 2)

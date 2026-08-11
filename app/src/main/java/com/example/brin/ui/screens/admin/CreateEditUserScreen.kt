@@ -22,6 +22,7 @@ import com.example.brin.data.api.ApiArea
 import com.example.brin.data.repository.AreaRepository
 import com.example.brin.data.repository.UserRepository
 import com.example.brin.ui.theme.*
+import com.example.brin.util.toUserMessage
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,7 +79,7 @@ fun CreateEditUserScreen(
         }
 
         Column(
-            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
+            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).navigationBarsPadding().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             UserFormField("Nama Lengkap", name, "Budi Santoso", onValueChange = { name = it })
@@ -167,7 +168,7 @@ fun CreateEditUserScreen(
                             UserRepository.createUser(name.trim(), email.trim(), password, role, areaIdVal)
                         }
                         result.onSuccess { onSaved() }
-                            .onFailure { errorMsg = it.message ?: "Gagal menyimpan"; isSaving = false }
+                            .onFailure { errorMsg = it.toUserMessage("Gagal menyimpan pengguna. Coba lagi."); isSaving = false }
                     }
                 },
                 enabled = !isSaving,

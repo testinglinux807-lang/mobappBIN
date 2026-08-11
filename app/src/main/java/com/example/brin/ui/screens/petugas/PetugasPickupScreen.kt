@@ -27,12 +27,14 @@ import com.example.brin.data.BinData
 import com.example.brin.data.BinStatus
 import com.example.brin.data.NotificationItem
 import com.example.brin.data.api.ApiPickup
+import com.example.brin.data.local.AppState
 import com.example.brin.data.repository.AlertRepository
 import com.example.brin.data.repository.BinRepository
 import com.example.brin.data.repository.PickupRepository
 import com.example.brin.ui.screens.shared.statusColor
 import com.example.brin.ui.screens.shared.statusLabel
 import com.example.brin.ui.theme.*
+import com.example.brin.util.toUserMessage
 import com.example.brin.util.LocationHelper
 import kotlinx.coroutines.launch
 
@@ -98,7 +100,7 @@ fun PetugasPickupScreen(onBinClick: (String) -> Unit) {
                 }
                 .onFailure {
                     processingBinId = null
-                    snackbar.showSnackbar(it.message ?: "Gagal mencatat pickup")
+                    snackbar.showSnackbar(it.toUserMessage("Gagal mencatat pickup. Coba lagi."))
                 }
         }
     }
@@ -139,13 +141,23 @@ fun PetugasPickupScreen(onBinClick: (String) -> Unit) {
                 }
                 .onFailure {
                     confirmingId = null
-                    snackbar.showSnackbar(it.message ?: "Gagal konfirmasi manual")
+                    snackbar.showSnackbar(it.toUserMessage("Gagal konfirmasi manual. Coba lagi."))
                 }
         }
     }
 
-    val inProgress = remember(pickups) { pickups.filter { it.status == "MENUNGGU_SENSOR" } }
-    val done       = remember(pickups) { pickups.filter { it.status == "SELESAI" } }
+    // Petugas hanya bertanggung jawab atas bin di area-nya (penanggung jawab). Semua tab
+    // di-scope ke area ini. Kalau area belum di-set (areaId null), fallback ke semua.
+    val areaId   = AppState.currentUser?.areaId
+    val myBins   = remember(bins, areaId) { if (areaId != null) bins.filter { it.areaId == areaId } else bins }
+    val myBinIds = remember(myBins) { myBins.map { it.id }.toSet() }
+    // Pickup dianggap tanggung jawab area kalau bin-nya ada di area petugas.
+    val myPickups = remember(pickups, myBinIds, areaId) {
+        if (areaId == null) pickups else pickups.filter { it.binId in myBinIds }
+    }
+
+    val inProgress = remember(myPickups) { myPickups.filter { it.status == "MENUNGGU_SENSOR" } }
+    val done       = remember(myPickups) { myPickups.filter { it.status == "SELESAI" } }
     // "Perlu Pickup" digerakkan oleh ALERT, bukan volume mentah: bin perlu pickup kalau
     // punya alert penuh (FULL_*) yang belum di-resolve, DAN belum ada pickup yang dibuat
     // setelah alert itu. Alert dibuat sekali per siklus (di-dedup backend) jadi penanda
@@ -155,8 +167,8 @@ fun PetugasPickupScreen(onBinClick: (String) -> Unit) {
             .groupBy { it.binRefId }
             .mapValues { (_, list) -> list.minOf { parseInstantMs(it.createdAtRaw) } }
     }
-    val needPickup = remember(bins, pickups, openFullAlertAt) {
-        bins.filter { bin ->
+    val needPickup = remember(myBins, pickups, openFullAlertAt) {
+        myBins.filter { bin ->
             if (bin.status == BinStatus.NORMAL) return@filter false  // guard alert basi di bin kosong
             val openAt = openFullAlertAt[bin.id] ?: return@filter false
             pickups.none { it.binId == bin.id && parseInstantMs(it.completedAt) >= openAt }
@@ -200,7 +212,7 @@ fun PetugasPickupScreen(onBinClick: (String) -> Unit) {
                     CircularProgressIndicator(color = GreenPrimary)
                 }
             } else {
-                Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp).padding(bottom = 80.dp),
+                Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
 
                     when (selectedTab) {

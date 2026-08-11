@@ -97,6 +97,7 @@ import com.example.brin.ui.theme.StatusNormal
 import com.example.brin.ui.theme.StatusNormalBg
 import com.example.brin.ui.theme.TextPrimary
 import com.example.brin.ui.theme.TextSecondary
+import com.example.brin.util.toUserMessage
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -144,7 +145,7 @@ fun PetugasScanScreen(onBinClick: (String) -> Unit = {}) {
             }
             PickupRepository.completePickup(binId, loc.lat, loc.lng)
                 .onSuccess { pickupPhase = "done"; pickupMsg = "Pickup tercatat, menunggu konfirmasi sensor." }
-                .onFailure { pickupPhase = "error"; pickupMsg = it.message ?: "Gagal mencatat pickup" }
+                .onFailure { pickupPhase = "error"; pickupMsg = it.toUserMessage("Gagal mencatat pickup. Coba lagi.") }
         }
     }
 

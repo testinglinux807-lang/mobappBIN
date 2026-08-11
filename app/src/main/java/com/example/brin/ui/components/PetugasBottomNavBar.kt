@@ -43,9 +43,12 @@ fun PetugasBottomNavBar(navController: NavController) {
     var needPickupCount by remember { mutableIntStateOf(0) }
     var unreadAlertIds  by remember { mutableStateOf<List<String>>(emptyList()) }
     suspend fun refreshBadge() {
-        val bins = BinRepository.getBins().getOrDefault(emptyList())
+        val allBins = BinRepository.getBins().getOrDefault(emptyList())
         val pickups = PickupRepository.getPickups().getOrDefault(emptyList())
         val unread = AlertRepository.getAlerts(resolved = false).getOrDefault(emptyList())
+        // Scope ke area petugas (penanggung jawab), konsisten dengan layar Pickup & Beranda.
+        val scopeAreaId = AppState.currentUser?.areaId
+        val bins = if (scopeAreaId != null) allBins.filter { it.areaId == scopeAreaId } else allBins
         fun ms(s: String?): Long = s?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() } ?: Long.MIN_VALUE
         // Sama seperti layar Pickup: bin perlu pickup = punya alert penuh (FULL_*) belum
         // di-resolve & belum ada pickup yang dibuat setelah alert itu. Stabil terhadap

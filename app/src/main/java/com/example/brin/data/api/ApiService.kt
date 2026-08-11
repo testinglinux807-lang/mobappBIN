@@ -120,4 +120,32 @@ interface ApiService {
 
     @PUT("alerts/{id}/resolve")
     suspend fun resolveAlert(@Path("id") id: String): AlertDetailResponse
+
+    // Devices (remote control Raspberry Pi) — ADMIN only, backend dukung role tsb
+    @GET("devices/state")
+    suspend fun getDeviceStates(): DeviceStateResponse
+
+    @GET("devices/{nodeId}/status")
+    suspend fun getDeviceStatus(
+        @Path("nodeId") nodeId: String,
+        @Query("live") live: Int = 1
+    ): DeviceStateSingleResponse
+
+    @POST("devices/{nodeId}/command")
+    suspend fun sendDeviceCommand(
+        @Path("nodeId") nodeId: String,
+        @Body body: DeviceCommandRequest
+    ): DeviceCommandResponse
+
+    @POST("devices/{nodeId}/camera/start")
+    suspend fun deviceCameraStart(@Path("nodeId") nodeId: String): DeviceCommandResponse
+
+    @POST("devices/{nodeId}/camera/stop")
+    suspend fun deviceCameraStop(@Path("nodeId") nodeId: String): DeviceCommandResponse
+
+    @POST("devices/{nodeId}/logs")
+    suspend fun deviceToggleLogs(
+        @Path("nodeId") nodeId: String,
+        @Body body: DeviceLogsRequest
+    ): DeviceCommandResponse
 }

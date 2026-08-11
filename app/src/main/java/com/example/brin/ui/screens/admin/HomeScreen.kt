@@ -36,7 +36,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun HomeScreen(onBinClick: (String) -> Unit, onRouteClick: (String) -> Unit = {}, onAddBin: () -> Unit = {}) {
+fun HomeScreen(onBinClick: (String) -> Unit, onRouteClick: (String) -> Unit = {}, onAddBin: () -> Unit = {}, onNotifClick: () -> Unit = {}) {
     var bins          by remember { mutableStateOf<List<BinData>>(emptyList()) }
     var recentAlerts  by remember { mutableStateOf<List<NotificationItem>>(emptyList()) }
     var openAlertBinIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -104,7 +104,6 @@ fun HomeScreen(onBinClick: (String) -> Unit, onRouteClick: (String) -> Unit = {}
             .fillMaxSize()
             .background(AppBackground)
             .verticalScroll(rememberScrollState())
-            .padding(bottom = 80.dp)
     ) {
         Column(
             modifier = Modifier
@@ -121,8 +120,14 @@ fun HomeScreen(onBinClick: (String) -> Unit, onRouteClick: (String) -> Unit = {}
                     Spacer(Modifier.height(2.dp))
                     Text(today, fontSize = 12.sp, color = Color.White.copy(alpha = 0.5f))
                 }
-                Box(modifier = Modifier.padding(top = 4.dp)) {
-                    Icon(Icons.Default.Notifications, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(24.dp))
+                Box(
+                    modifier = Modifier
+                        .padding(top = 4.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onNotifClick)
+                        .padding(4.dp)
+                ) {
+                    Icon(Icons.Default.Notifications, contentDescription = "Notifikasi", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(24.dp))
                     if (criticals.isNotEmpty()) Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFFF5252)).align(Alignment.TopEnd))
                 }
             }

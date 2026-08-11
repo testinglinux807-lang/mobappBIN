@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.example.brin.data.api.ApiArea
 import com.example.brin.data.repository.AreaRepository
 import com.example.brin.ui.theme.*
+import com.example.brin.util.toUserMessage
 import kotlinx.coroutines.launch
 
 @Composable
@@ -45,7 +46,7 @@ fun AreasScreen(onBack: () -> Unit) {
     fun loadAreas() {
         isLoading = true; errorMsg = null
         scope.launch {
-            AreaRepository.getAreas().onSuccess { areas = it }.onFailure { errorMsg = it.message }
+            AreaRepository.getAreas().onSuccess { areas = it }.onFailure { errorMsg = it.toUserMessage("Gagal memuat daftar area.") }
             isLoading = false
         }
     }
@@ -70,7 +71,7 @@ fun AreasScreen(onBack: () -> Unit) {
                         Button(onClick = { loadAreas() }, colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)) { Text("Coba Lagi") }
                     }
                 }
-                else -> Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).padding(bottom = 80.dp)) {
+                else -> Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
                     if (areas.isEmpty()) {
                         Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
                             Text("Belum ada area.", color = TextHint, fontSize = 13.sp)
@@ -142,7 +143,7 @@ fun AreasScreen(onBack: () -> Unit) {
                                 AreaRepository.createArea(formName.trim())
                             result.onSuccess {
                                 loadAreas(); showForm = false
-                            }.onFailure { formError = it.message ?: "Gagal menyimpan"; isSaving = false }
+                            }.onFailure { formError = it.toUserMessage("Gagal menyimpan area. Coba lagi."); isSaving = false }
                             isSaving = false
                         }
                     },
@@ -178,7 +179,7 @@ fun AreasScreen(onBack: () -> Unit) {
                         scope.launch {
                             AreaRepository.deleteArea(area.id)
                                 .onSuccess { areas = areas.filter { it.id != area.id }; deleteTarget = null }
-                                .onFailure { deleteError = it.message ?: "Gagal menghapus"; isDeleting = false }
+                                .onFailure { deleteError = it.toUserMessage("Gagal menghapus area. Coba lagi."); isDeleting = false }
                             isDeleting = false
                         }
                     },

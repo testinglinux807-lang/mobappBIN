@@ -1,6 +1,7 @@
 package com.example.brin.data.api
 
 import com.google.gson.annotations.SerializedName
+import com.google.gson.JsonObject
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -296,3 +297,51 @@ data class SchedulesResponse(val success: Boolean, val data: List<ApiSchedule>?,
 data class StandardResponse(val success: Boolean, val message: String)
 
 data class Pagination(val total: Int, val page: Int, val limit: Int, val totalPages: Int)
+
+// ── Device remote control (Raspberry Pi) ──────────────────────────────────────
+
+data class DeviceCommandRequest(val action: String, val args: Map<String, Any?>? = null)
+
+data class DeviceLogsRequest(val on: Boolean = true, val ttl: Int? = null)
+
+/** State retained yang dipancarkan Pi (remote_control.py). Field semua optional. */
+data class DeviceState(
+    val nodeId: String = "",
+    val online: Boolean = false,
+    val camera: String? = null,          // "running" | "stopped" | "error"
+    val camera_error: String? = null,
+    val last_detection: DeviceDetection? = null,
+    val serial_stm32: String? = null,    // "connected" | "disconnected"
+    val serial_lora: String? = null,
+    val sensor_data: String? = null,     // "ada" | "belum ada"
+    val last_seq: Int? = null,
+    val uptime_sec: Double? = null,
+    val log_stream: Boolean = false,     // flag: keran log sedang nyala?
+    val ts: Double? = null,              // unix detik saat snapshot diambil
+    val reason: String? = null,
+    val receivedAt: Long? = null         // dicat backend saat menerima state (ms)
+)
+
+data class DeviceDetection(
+    val kategori: String? = null,        // "Organik" | "Anorganik" | "B3" | null
+    val confidence: Double? = null,      // 0..1
+    val ts: Double? = null
+)
+
+data class DeviceStateResponse(val success: Boolean, val message: String, val data: Map<String, DeviceState>?)
+
+data class DeviceStateSingleResponse(val success: Boolean, val message: String, val data: DeviceState?)
+
+data class DeviceCommandResponse(val success: Boolean, val message: String, val data: DeviceAckResult?)
+
+/** Isi ack yang dibalas Pi setelah menjalankan perintah. */
+data class DeviceAckResult(
+    val ok: Boolean = false,
+    val id: String? = null,
+    val action: String? = null,
+    val error: String? = null,
+    val available: List<String>? = null,
+    val result: JsonObject? = null,
+    val duplicate: Boolean? = null,
+    val ts: Double? = null
+)

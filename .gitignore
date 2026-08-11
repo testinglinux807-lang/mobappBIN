@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+# kredensial signing release — jangan di-commit
+keystore.properties
+*.jks

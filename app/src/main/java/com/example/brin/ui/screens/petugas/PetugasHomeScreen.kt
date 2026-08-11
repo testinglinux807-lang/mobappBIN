@@ -26,6 +26,8 @@ import com.example.brin.data.local.AppState
 import com.example.brin.data.repository.AlertRepository
 import com.example.brin.data.repository.BinRepository
 import com.example.brin.data.repository.PickupRepository
+import com.example.brin.ui.screens.shared.BinOnlineDot
+import com.example.brin.ui.screens.shared.BinStatusBadge
 import com.example.brin.ui.screens.shared.statusColor
 import com.example.brin.ui.screens.shared.statusLabel
 import com.example.brin.ui.theme.*
@@ -52,13 +54,20 @@ fun PetugasHomeScreen(onBinClick: (String) -> Unit = {}, onNotifClick: () -> Uni
         else      -> "Selamat sore,"
     }
 
+    // Petugas hanya bertanggung jawab atas bin di area-nya (penanggung jawab). Kalau area
+    // belum di-set (areaId null), tampilkan semua bin sebagai fallback.
+    val areaId = AppState.currentUser?.areaId
+    val myBins = remember(bins, areaId) {
+        if (areaId != null) bins.filter { it.areaId == areaId } else bins
+    }
+
     // Konsisten dengan layar Pickup & badge: bin "perlu perhatian" = punya alert penuh
     // (FULL_*) belum di-resolve & belum ada pickup setelah alert itu. Jadi setelah pickup /
     // konfirmasi manual, bin langsung hilang dari sini walau volume sensor masih tinggi.
     val openFullAlertAt = alerts.filter { it.rawType == "FULL_VOLUME" || it.rawType == "FULL_WEIGHT" }
         .groupBy { it.binRefId }
         .mapValues { (_, list) -> list.minOf { parseInstantMs(it.createdAtRaw) } }
-    val needAttention = bins.filter { bin ->
+    val needAttention = myBins.filter { bin ->
         if (bin.status == BinStatus.NORMAL) return@filter false  // guard alert basi di bin kosong
         val openAt = openFullAlertAt[bin.id] ?: return@filter false
         pickups.none { it.binId == bin.id && parseInstantMs(it.completedAt) >= openAt }
@@ -87,7 +96,7 @@ fun PetugasHomeScreen(onBinClick: (String) -> Unit = {}, onNotifClick: () -> Uni
             Spacer(Modifier.height(20.dp))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
-                HeaderStat("${bins.size}", "Total")
+                HeaderStat("${myBins.size}", "Total")
                 Box(modifier = Modifier.width(1.dp).height(32.dp).background(Color.White.copy(alpha = 0.18f)))
                 HeaderStat("${needAttention.count { it.status == BinStatus.NEED_PICKUP }}", "Pickup")
                 Box(modifier = Modifier.width(1.dp).height(32.dp).background(Color.White.copy(alpha = 0.18f)))
@@ -95,7 +104,7 @@ fun PetugasHomeScreen(onBinClick: (String) -> Unit = {}, onNotifClick: () -> Uni
             }
         }
 
-        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 80.dp)) {
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Spacer(Modifier.height(20.dp))
 
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -115,9 +124,32 @@ fun PetugasHomeScreen(onBinClick: (String) -> Unit = {}, onNotifClick: () -> Uni
             }
 
             Spacer(Modifier.height(20.dp))
+
+            // Monitoring semua bin di area petugas (seperti "Status Bin" di dashboard admin)
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Status Bin", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                Text("${myBins.size} bin", fontSize = 13.sp, color = GreenMedium)
+            }
+            Spacer(Modifier.height(8.dp))
+            if (myBins.isEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                    Text("Belum ada bin di area Anda", color = TextHint, fontSize = 14.sp)
+                }
+            } else {
+                Surface(shape = RoundedCornerShape(12.dp), color = CardBg, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    Column {
+                        myBins.forEachIndexed { index, bin ->
+                            BinMonitorRow(bin = bin, onClick = { onBinClick(bin.id) })
+                            if (index < myBins.lastIndex) HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 14.dp))
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
             Surface(shape = RoundedCornerShape(12.dp), color = CardBg, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    InfoItem(Icons.Default.DeleteOutline, "Total Bin", "${bins.size} bin")
+                    InfoItem(Icons.Default.DeleteOutline, "Total Bin", "${myBins.size} bin")
                     HorizontalDivider(color = DividerColor)
                     InfoItem(Icons.Default.Warning, "Bin Perlu Perhatian", "${needAttention.size} bin")
                     HorizontalDivider(color = DividerColor)
@@ -125,6 +157,38 @@ fun PetugasHomeScreen(onBinClick: (String) -> Unit = {}, onNotifClick: () -> Uni
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BinMonitorRow(bin: BinData, onClick: () -> Unit) {
+    val statusCol = statusColor(bin.status)
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1.8f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BinOnlineDot(bin.online)
+                Spacer(Modifier.width(6.dp))
+                Text(bin.nodeId, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+            }
+            Text(bin.location, fontSize = 11.sp, color = TextSecondary)
+        }
+        Column(modifier = Modifier.weight(2f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LinearProgressIndicator(
+                    progress = { bin.capacity / 100f },
+                    modifier = Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)),
+                    color = statusCol, trackColor = DividerColor
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("${bin.capacity}%", fontSize = 11.sp, color = statusCol, fontWeight = FontWeight.SemiBold)
+            }
+            Text("Gas: ${bin.gas.toInt()} ppm", fontSize = 10.sp, color = TextHint)
+        }
+        Spacer(Modifier.width(8.dp))
+        BinStatusBadge(bin.status)
     }
 }
 

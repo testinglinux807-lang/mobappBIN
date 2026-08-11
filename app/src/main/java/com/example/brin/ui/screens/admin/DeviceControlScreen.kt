@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsInputAntenna
@@ -184,6 +185,35 @@ fun DeviceControlScreen(onBack: () -> Unit, nodeId: String) {
         }
     }
 
+    // Action "run" beda dari perintah lain: main.py memanggil os._exit(0) supaya
+    // systemd (Restart=always) menghidupkannya kembali. Prosesnya mati SEBELUM
+    // sempat mengirim ack, jadi backend selalu kehabisan waktu 12 detik dan balas
+    // "Perangkat tidak merespons". Itu hasil yang diharapkan, bukan kegagalan —
+    // makanya timeout di sini dihitung sukses. Error lain tetap ditampilkan.
+    fun runSmartbin(onDone: (Boolean) -> Unit = {}) {
+        lastErr = null
+        scope.launch {
+            var ok = true
+            DeviceRepository.sendCommand(nodeId, "run", null)
+                .onSuccess { resp ->
+                    val ack = resp.data
+                    if (ack != null && !ack.ok) { lastErr = ack.error ?: resp.message; ok = false }
+                }
+                .onFailure { e ->
+                    val msg = e.toUserMessage("Gagal mengirim perintah.")
+                    if (!msg.isAckTimeout()) { lastErr = msg; ok = false }
+                }
+            // Pi butuh beberapa detik buat restart — refresh sekali lagi setelah
+            // sempat naik, supaya kartu status tidak nyangkut di kondisi lama.
+            fetchState(clearErr = lastErr == null)
+            onDone(ok)
+            if (ok) {
+                kotlinx.coroutines.delay(5000)
+                fetchState(clearErr = false)
+            }
+        }
+    }
+
     fun runCameraStart(onDone: () -> Unit = {}) {
         lastErr = null
         scope.launch {
@@ -221,7 +251,7 @@ fun DeviceControlScreen(onBack: () -> Unit, nodeId: String) {
     Scaffold(topBar = {}) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding).background(AppBackground)) {
             // ── header ────────────────────────────────────────────────────────
-            Header(onBack, nodeId, state?.online ?: false)
+            Header(onBack, nodeId)
 
             // ── konten ────────────────────────────────────────────────────────
             Column(
@@ -239,44 +269,62 @@ fun DeviceControlScreen(onBack: () -> Unit, nodeId: String) {
                     ErrorBanner(lastErr!!) { lastErr = null }
                 }
 
-                StatusCard(state, loading, lastUpdate, onRefresh = { fetchState() })
+                StatusCard(state, loading, lastUpdate, onRefresh = { fetchState() }, online = state?.online ?: false)
 
                 Spacer(Modifier.height(16.dp))
 
-                // ── aksi kamera ───────────────────────────────────────────────
-                SectionLabel("Kamera")
-                var camOnBusy by remember { mutableStateOf(false) }
-                var camOffBusy by remember { mutableStateOf(false) }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(
-                        onClick = { camOnBusy = true; runCameraStart { camOnBusy = false } },
-                        enabled = !camOnBusy,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = GreenPrimary),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Nyalakan")
-                    }
-                    OutlinedButton(
-                        onClick = { camOffBusy = true; runCameraStop { camOffBusy = false } },
-                        enabled = !camOffBusy,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = StatusCritical),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.VideocamOff, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Matikan")
+                // ── tombol utama: nyalakan / matikan smartbin ─────────────────
+                // Label & aksi diturunkan dari state.camera (kondisi asli Pi), bukan
+                // flag lokal — jadi kalau dinyalakan dari HP lain, tombol di sini ikut
+                // berubah lewat WebSocket tanpa perlu segarkan manual.
+                val camRunning = state?.camera == "running"
+                var smartbinBusy by remember { mutableStateOf(false) }
+                Button(
+                    onClick = {
+                        smartbinBusy = true
+                        if (camRunning) runCameraStop { smartbinBusy = false }
+                        else runCameraStart { smartbinBusy = false }
+                    },
+                    enabled = !smartbinBusy && state != null,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (camRunning) StatusCritical else GreenPrimary
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().height(52.dp)
+                ) {
+                    if (smartbinBusy) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (camRunning) "Mematikan…" else "Menyalakan…", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    } else {
+                        Icon(
+                            if (camRunning) Icons.Default.VideocamOff else Icons.Default.Videocam,
+                            contentDescription = null, modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (camRunning) "Matikan Smartbin" else "Nyalakan Smartbin",
+                            fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    when {
+                        state == null -> "Menunggu data perangkat…"
+                        camRunning    -> "Smartbin aktif - kamera menyortir sampah otomatis."
+                        else          -> "Smartbin siaga - perangkat tetap terhubung, penyortiran berhenti."
+                    },
+                    color = if (camRunning) StatusNormal else TextSecondary, fontSize = 12.sp
+                )
 
                 Spacer(Modifier.height(20.dp))
 
                 // ── daya ──────────────────────────────────────────────────────
                 SectionLabel("Daya")
                 var powerAction by remember { mutableStateOf<String?>(null) }
+                var runBusy by remember { mutableStateOf(false) }
+                var runDone by remember { mutableStateOf(false) }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedButton(
                         onClick = { powerAction = "reboot" },
@@ -299,47 +347,46 @@ fun DeviceControlScreen(onBack: () -> Unit, nodeId: String) {
                         Text("Shutdown")
                     }
                 }
+                Spacer(Modifier.height(10.dp))
+                // Restart layanan (action "run"): jalankan ulang main.py tanpa reboot OS.
+                // Dipakai kalau layanan nyangkut — bukan tombol nyala/mati sehari-hari.
+                OutlinedButton(
+                    onClick = { powerAction = "run" },
+                    enabled = !runBusy,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (runBusy) {
+                        CircularProgressIndicator(color = TextSecondary, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Merestart…")
+                    } else {
+                        Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Restart Layanan")
+                    }
+                }
+                if (runDone) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Layanan direstart. Perangkat kembali terhubung beberapa detik lagi.",
+                        color = StatusNormal, fontSize = 12.sp
+                    )
+                }
                 powerAction?.let { action ->
                     PowerDialog(
                         action = action,
                         onCancel = { powerAction = null },
                         onConfirm = {
                             powerAction = null
-                            if (action == "shutdown") runCommand("shutdown") else runCommand("reboot")
+                            when (action) {
+                                "shutdown" -> runCommand("shutdown")
+                                "reboot"   -> runCommand("reboot")
+                                else       -> { runBusy = true; runDone = false
+                                                runSmartbin { ok -> runBusy = false; runDone = ok } }
+                            }
                         }
-                    )
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                // ── nyalakan smartbin ─────────────────────────────────────────
-                var runBusy by remember { mutableStateOf(false) }
-                var runDone by remember { mutableStateOf(false) }
-                Button(
-                    onClick = {
-                        runBusy = true; runDone = false
-                        runCommand("run", args = null) { runBusy = false; runDone = true }
-                    },
-                    enabled = !runBusy,
-                    colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().height(52.dp)
-                ) {
-                    if (runBusy) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Menjalankan…", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    } else {
-                        Icon(Icons.Default.PowerSettingsNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Nyalakan Smartbin", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-                if (runDone) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "Perintah dikirim. main.py otomatis jalan kembali (kamera nyala). Log di bawah akan berisi baris startup baru.",
-                        color = StatusNormal, fontSize = 12.sp
                     )
                 }
 
@@ -365,7 +412,9 @@ fun DeviceControlScreen(onBack: () -> Unit, nodeId: String) {
 // ── komponen ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun Header(onBack: () -> Unit, nodeId: String, online: Boolean) {
+private fun Header(onBack: () -> Unit, nodeId: String) {
+    // Header 1 baris tipis — samain ukurannya dengan layar lain (mis. Manajemen Bin).
+    // Dot Online/Offline dipindah ke kartu Status Perangkat di bawah.
     Box(modifier = Modifier.fillMaxWidth().background(GreenDark).statusBarsPadding()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
@@ -374,24 +423,14 @@ private fun Header(onBack: () -> Unit, nodeId: String, online: Boolean) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = Color.White)
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(nodeId, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Text("Remote Control", fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .background(if (online) GreenLight else StatusCritical, RoundedCornerShape(50))
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    if (online) "Online" else "Offline",
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.7f)
-                )
-            }
-            Spacer(Modifier.width(16.dp))
+            Text(nodeId, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "Remote Control",
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.55f),
+                modifier = Modifier.padding(top = 2.dp)
+            )
         }
     }
 }
@@ -428,11 +467,20 @@ private fun StatusCard(
     loading: Boolean,
     lastUpdate: String?,
     onRefresh: () -> Unit,
+    online: Boolean,
 ) {
     Surface(shape = RoundedCornerShape(14.dp), color = CardBg, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(if (online) GreenLight else StatusCritical, RoundedCornerShape(50))
+                )
+                Spacer(Modifier.width(6.dp))
                 Text("Status Perangkat", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
+                Text("${if (online) "Online" else "Offline"} · ${lastUpdate ?: "-"}", fontSize = 11.sp, color = TextHint)
+                Spacer(Modifier.width(8.dp))
                 if (loading) CircularProgressIndicator(color = GreenPrimary, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                 else TextButton(onClick = onRefresh) { Text("Segarkan", fontSize = 12.sp, color = GreenPrimary) }
             }
@@ -449,24 +497,24 @@ private fun StatusCard(
                         "running" -> "● Berjalan"
                         "stopped" -> "● Mati"
                         "error"   -> "✕ Error"
-                        else      -> "—"
+                        else      -> "-"
                     },
                     if (state.camera == "running") StatusNormal else if (state.camera == "error") StatusCritical else TextSecondary)
                 if (state.camera == "error" && !state.camera_error.isNullOrBlank()) {
                     Text(state.camera_error, color = StatusCritical, fontSize = 11.sp, modifier = Modifier.padding(start = 34.dp))
                 }
                 Divider(color = DividerColor, modifier = Modifier.padding(vertical = 8.dp))
-                StatusRow(Icons.Default.Settings, "STM32", state.serial_stm32 ?: "—",
+                StatusRow(Icons.Default.Settings, "STM32", serialLabel(state.serial_stm32),
                     if (state.serial_stm32 == "connected") StatusNormal else if (state.serial_stm32 == "disconnected") StatusWarning else TextSecondary)
                 Divider(color = DividerColor, modifier = Modifier.padding(vertical = 8.dp))
-                StatusRow(Icons.Default.SettingsInputAntenna, "LoRa", state.serial_lora ?: "—",
+                StatusRow(Icons.Default.SettingsInputAntenna, "LoRa", serialLabel(state.serial_lora),
                     if (state.serial_lora == "connected") StatusNormal else if (state.serial_lora == "disconnected") StatusWarning else TextSecondary)
                 Divider(color = DividerColor, modifier = Modifier.padding(vertical = 8.dp))
                 lastUpdate?.let { upd ->
                     StatusRow(Icons.Default.Refresh, "Update", upd, TextSecondary)
                     Divider(color = DividerColor, modifier = Modifier.padding(vertical = 8.dp))
                 }
-                StatusRow(Icons.Default.Schedule, "Uptime", state.uptime_sec?.let { formatUptime(it) } ?: "—", TextSecondary)
+                StatusRow(Icons.Default.Schedule, "Uptime", state.uptime_sec?.let { formatUptime(it) } ?: "-", TextSecondary)
             }
         }
     }
@@ -475,14 +523,27 @@ private fun StatusCard(
 @Composable
 private fun PowerDialog(action: String, onCancel: () -> Unit, onConfirm: () -> Unit) {
     val isShutdown = action == "shutdown"
+    val isRun      = action == "run"
     AlertDialog(
         onDismissRequest = onCancel,
         containerColor = CardBg,
-        title = { Text(if (isShutdown) "Matikan Perangkat?" else "Restart Perangkat?", color = TextPrimary, fontWeight = FontWeight.Bold) },
+        title = {
+            Text(
+                when {
+                    isShutdown -> "Matikan Perangkat?"
+                    isRun      -> "Restart Layanan?"
+                    else       -> "Restart Perangkat?"
+                },
+                color = TextPrimary, fontWeight = FontWeight.Bold
+            )
+        },
         text = {
             Text(
-                if (isShutdown) "Raspi akan mati total. Kamu harus SSH ke raspi untuk nyalain lagi. Lanjut?"
-                else "Raspi akan restart. Butuh beberapa detik sampai online lagi. Lanjut?",
+                when {
+                    isShutdown -> "Raspi akan mati total. Kamu harus SSH ke raspi untuk nyalain lagi. Lanjut?"
+                    isRun      -> "Layanan smartbin dijalankan ulang tanpa mematikan raspi. Terputus beberapa detik. Lanjut?"
+                    else       -> "Raspi akan restart. Butuh beberapa detik sampai online lagi. Lanjut?"
+                },
                 color = TextSecondary, fontSize = 14.sp
             )
         },
@@ -571,6 +632,22 @@ private fun StatusRow(icon: ImageVector, label: String, value: String, tint: Col
         Text(value, fontSize = 13.sp, color = tint, fontWeight = FontWeight.Medium, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
     }
 }
+
+/** Status serial dari Pi ("connected"/"disconnected") jadi label Indonesia. */
+private fun serialLabel(v: String?): String = when (v) {
+    "connected"    -> "Terhubung"
+    "disconnected" -> "Terputus"
+    null           -> "-"
+    else           -> v
+}
+
+/**
+ * Backend balas "Perangkat {nodeId} tidak merespons dalam 12s; perintah mungkin
+ * tetap dieksekusi" saat ack tidak datang. Untuk action "run" itu memang selalu
+ * terjadi (proses bunuh diri sebelum sempat balas), jadi dikenali di sini.
+ */
+private fun String.isAckTimeout(): Boolean =
+    contains("tidak merespons", ignoreCase = true) || contains("tidak merespon", ignoreCase = true)
 
 private fun formatUptime(sec: Double): String {
     val s = sec.toLong()

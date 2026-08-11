@@ -10,6 +10,31 @@ sealed class WsEvent {
 
     data class BinStatus(val nodeId: String, val status: String, val lastSeen: String?) : WsEvent()
 
+    // ── Remote control Pi (DEVICE_*) ────────────────────────────────────────────
+    data class DeviceState(
+        val nodeId: String,
+        val online: Boolean,
+        val camera: String?,
+        val cameraError: String?,
+        val lastDetection: String?,        // "Organik 94%" utk badge
+        val serialStm32: String?,
+        val serialLora: String?,
+        val sensorData: String?,
+        val uptimeSec: Double?,
+        val logStream: Boolean,
+        val reason: String?
+    ) : WsEvent()
+
+    data class DeviceAck(
+        val nodeId: String,
+        val ok: Boolean,
+        val action: String?,
+        val error: String?,
+        val duplicate: Boolean?
+    ) : WsEvent()
+
+    data class DeviceLog(val nodeId: String, val lines: List<String>, val dropped: Int?) : WsEvent()
+
     data class AlertNew(
         val alertId: String, val nodeId: String, val binId: String,
         val type: String, val message: String,

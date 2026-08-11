@@ -6,7 +6,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,11 +33,14 @@ import com.example.brin.ui.screens.admin.MapScreen
 import com.example.brin.ui.screens.admin.NotificationsScreen
 import com.example.brin.ui.screens.admin.SettingsScreen
 import com.example.brin.ui.screens.admin.AreasScreen
+import com.example.brin.ui.screens.admin.BinsScreen
 import com.example.brin.ui.screens.admin.CreateEditBinScreen
 import com.example.brin.ui.screens.admin.CreateEditUserScreen
 import com.example.brin.ui.screens.admin.UsersScreen
+import com.example.brin.ui.screens.admin.DeviceControlScreen
 import com.example.brin.ui.screens.shared.DetailBinScreen
 import com.example.brin.ui.screens.shared.DetailRuteScreen
+import com.example.brin.ui.screens.shared.PanduanScreen
 
 sealed class AdminScreen(val route: String) {
     object Home          : AdminScreen("admin_home")
@@ -59,6 +64,11 @@ sealed class AdminScreen(val route: String) {
         fun go(userId: String) = "admin_edit_user/$userId"
     }
     object Areas         : AdminScreen("admin_areas")
+    object Bins          : AdminScreen("admin_bins")
+    object Panduan       : AdminScreen("admin_panduan")
+    object DeviceControl : AdminScreen("admin_device_control/{nodeId}") {
+        fun go(nodeId: String) = "admin_device_control/$nodeId"
+    }
 }
 
 val adminBottomNavRoutes = listOf(
@@ -81,10 +91,14 @@ fun AdminNavHost(onLogout: () -> Unit) {
     DisposableEffect(Unit) { onDispose { WebSocketManager.disconnect() } }
 
     Scaffold(
-        modifier  = Modifier.fillMaxSize(),
+        modifier     = Modifier.fillMaxSize(),
+        // Scaffold jangan ikut-ikutan add nav bar padding sendiri — biar bottomBar
+        // (yang udah punya navigationBarsPadding) yang pegang. Kalau tidak, padding
+        // dobel dan layar jadi kegedean.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = { if (showBottom) AdminBottomNavBar(navController) }
-    ) { _ ->
-        Box(modifier = Modifier.fillMaxSize()) {
+    ) { inner ->
+        Box(modifier = Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
             NavHost(
                 navController    = navController,
                 startDestination = AdminScreen.Home.route,
@@ -95,7 +109,15 @@ fun AdminNavHost(onLogout: () -> Unit) {
                     HomeScreen(
                         onBinClick   = { navController.navigate(AdminScreen.DetailBin.go(it)) },
                         onRouteClick = { navController.navigate(AdminScreen.DetailRute.go(it)) },
-                        onAddBin     = { navController.navigate(AdminScreen.CreateBin.route) }
+                        onAddBin     = { navController.navigate(AdminScreen.CreateBin.route) },
+                        onNotifClick = {
+                            // pakai opsi yang sama dgn bottom nav supaya tab Notifikasi ikut ke-highlight
+                            navController.navigate(AdminScreen.Notifications.route) {
+                                popUpTo(AdminScreen.Home.route) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
                     )
                 }
                 composable(AdminScreen.Map.route) {
@@ -109,8 +131,38 @@ fun AdminNavHost(onLogout: () -> Unit) {
                     SettingsScreen(
                         onLogout    = { scope.launch { AuthRepository.logout(context) }; WebSocketManager.disconnect(); onLogout() },
                         onUsers     = { navController.navigate(AdminScreen.Users.route) },
-                        onAreas     = { navController.navigate(AdminScreen.Areas.route) }
+                        onAreas     = { navController.navigate(AdminScreen.Areas.route) },
+                        onBins      = { navController.navigate(AdminScreen.Bins.route) },
+                        onHelp      = { navController.navigate(AdminScreen.Panduan.route) },
+                        onDevices   = { navController.navigate(AdminScreen.DeviceControl.go("bin-003")) }
                     )
+                }
+                composable(
+                    route             = AdminScreen.Bins.route,
+                    enterTransition   = { slideInHorizontally(tween(350)) { it } + fadeIn(tween(350)) },
+                    exitTransition    = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(300)) },
+                    popExitTransition = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(300)) }
+                ) {
+                    BinsScreen(
+                        onBack = { navController.popBackStack() },
+                        onAdd  = { navController.navigate(AdminScreen.CreateBin.route) },
+                        onEdit = { navController.navigate(AdminScreen.EditBin.go(it)) }
+                    )
+                }
+                composable(
+                    route             = AdminScreen.DeviceControl.route,
+                    arguments         = listOf(navArgument("nodeId") { type = NavType.StringType })
+                ) { entry ->
+                    val nodeId = entry.arguments?.getString("nodeId") ?: "bin-003"
+                    DeviceControlScreen(onBack = { navController.popBackStack() }, nodeId = nodeId)
+                }
+                composable(
+                    route             = AdminScreen.Panduan.route,
+                    enterTransition   = { slideInHorizontally(tween(350)) { it } + fadeIn(tween(350)) },
+                    exitTransition    = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(300)) },
+                    popExitTransition = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(300)) }
+                ) {
+                    PanduanScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     route             = AdminScreen.Users.route,

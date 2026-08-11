@@ -566,7 +566,9 @@ private fun BinPopupCard(bin: BinData, onDetail: () -> Unit) {
 private fun OsmMapView(bins: List<BinData>, centerOn: GeoPoint?, userLocation: GeoPoint?, modifier: Modifier = Modifier, onMarkerClick: (BinData) -> Unit) {
     val context   = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    Configuration.getInstance().userAgentValue = context.packageName
+    // OSM memblokir User-Agent generik/template (mis. "com.example.*").
+    // Harus pakai identitas unik, kalau tidak semua tile balik HTTP 403 "Access blocked".
+    Configuration.getInstance().userAgentValue = "BRIN-WasteApp/1.0 (${context.packageName})"
 
     val mapView = remember {
         MapView(context).apply {

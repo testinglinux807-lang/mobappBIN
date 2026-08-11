@@ -21,6 +21,7 @@ import com.example.brin.data.api.ApiArea
 import com.example.brin.data.repository.AreaRepository
 import com.example.brin.data.repository.BinRepository
 import com.example.brin.ui.theme.*
+import com.example.brin.util.toUserMessage
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -98,6 +99,7 @@ fun CreateEditBinScreen(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -181,7 +183,7 @@ fun CreateEditBinScreen(
                             }
                             onSaved()
                         }.onFailure { e ->
-                            errorMsg = e.message ?: "Gagal menyimpan"
+                            errorMsg = e.toUserMessage("Gagal menyimpan bin. Coba lagi.")
                             isSaving = false
                         }
                     }

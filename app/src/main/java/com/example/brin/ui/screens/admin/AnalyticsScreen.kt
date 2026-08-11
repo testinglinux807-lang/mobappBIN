@@ -76,7 +76,7 @@ fun AnalyticsScreen() {
             }
         }
 
-        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 80.dp)) {
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Spacer(Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AnalyticCard("$totalBin",     "Total Bin",      GreenPrimary,   Icons.Default.DeleteOutline, Modifier.weight(1f))

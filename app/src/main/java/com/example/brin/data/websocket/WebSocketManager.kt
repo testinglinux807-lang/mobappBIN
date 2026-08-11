@@ -142,6 +142,46 @@ object WebSocketManager {
                         confidence = payload.dbl("confidence"),
                         createdAt  = payload.str("createdAt")
                     )
+                    "DEVICE_STATE" -> WsEvent.DeviceState(
+                        nodeId      = payload.str("nodeId"),
+                        online      = payload.bool("online"),
+                        camera      = payload.nullableStr("camera"),
+                        cameraError = payload.nullableStr("camera_error"),
+                        lastDetection = payload.get("last_detection")
+                            ?.takeUnless { it.isJsonNull }
+                            ?.asJsonObject
+                            ?.let { d ->
+                                val kat  = d.get("kategori")?.takeUnless { it.isJsonNull }?.asString
+                                val conf = d.get("confidence")?.takeUnless { it.isJsonNull }?.asDouble
+                                when {
+                                    kat.isNullOrBlank() -> null
+                                    conf == null        -> kat
+                                    else                -> "$kat ${(conf * 100).toInt()}%"
+                                }
+                            },
+                        serialStm32 = payload.nullableStr("serial_stm32"),
+                        serialLora  = payload.nullableStr("serial_lora"),
+                        sensorData  = payload.nullableStr("sensor_data"),
+                        uptimeSec   = payload.nullableDbl("uptime_sec"),
+                        logStream   = payload.bool("log_stream"),
+                        reason      = payload.nullableStr("reason")
+                    )
+                    "DEVICE_ACK" -> WsEvent.DeviceAck(
+                        nodeId    = payload.str("nodeId"),
+                        ok        = payload.bool("ok"),
+                        action    = payload.nullableStr("action"),
+                        error     = payload.nullableStr("error"),
+                        duplicate = payload.get("duplicate")?.takeUnless { it.isJsonNull }?.asBoolean
+                    )
+                    "DEVICE_LOG" -> WsEvent.DeviceLog(
+                        nodeId  = payload.str("nodeId"),
+                        lines   = payload.get("lines")
+                            ?.takeUnless { it.isJsonNull }
+                            ?.asJsonArray
+                            ?.mapNotNull { it.takeUnless { n -> n.isJsonNull }?.asString }
+                            ?: emptyList(),
+                        dropped = payload.get("dropped")?.takeUnless { it.isJsonNull }?.asInt
+                    )
                     else -> return
                 }
                 emit(wsEvent)
@@ -169,3 +209,9 @@ object WebSocketManager {
 private fun JsonObject.str(key: String)  = get(key)?.asString ?: ""
 private fun JsonObject.dbl(key: String)  = get(key)?.asDouble ?: 0.0
 private fun JsonObject.int_(key: String) = get(key)?.asInt    ?: 0
+private fun JsonObject.nullableStr(key: String): String? =
+    get(key)?.takeUnless { it.isJsonNull }?.asString
+private fun JsonObject.nullableDbl(key: String): Double? =
+    get(key)?.takeUnless { it.isJsonNull }?.asDouble
+private fun JsonObject.bool(key: String): Boolean =
+    get(key)?.takeUnless { it.isJsonNull }?.asBoolean ?: false

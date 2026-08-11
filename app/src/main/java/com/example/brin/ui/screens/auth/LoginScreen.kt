@@ -29,6 +29,7 @@ import com.example.brin.R
 import com.example.brin.data.UserRole
 import com.example.brin.data.repository.AuthRepository
 import com.example.brin.ui.theme.*
+import com.example.brin.util.toUserMessage
 import kotlinx.coroutines.launch
 
 @Composable
@@ -54,7 +55,10 @@ fun LoginScreen(onLoginSuccess: (String, UserRole) -> Unit) {
                     onLoginSuccess(user.name, role)
                 },
                 onFailure = {
-                    errorMsg  = it.message ?: "Login gagal"
+                    errorMsg  = it.toUserMessage(
+                        fallback = "Login gagal. Coba lagi sebentar lagi.",
+                        on401    = "Email atau password salah."
+                    )
                     isLoading = false
                 }
             )
