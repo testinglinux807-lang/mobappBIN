@@ -62,6 +62,7 @@ import com.example.brin.data.websocket.WsEvent
 import com.example.brin.data.websocket.WebSocketManager
 import com.example.brin.ui.theme.*
 import com.example.brin.util.toUserMessage
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -119,7 +120,16 @@ fun DeviceControlScreen(onBack: () -> Unit, nodeId: String) {
         }
     }
 
-    LaunchedEffect(Unit) { fetchState() }
+    // Begitu masuk layar: muat status + pastikan keran log-streaming nyala
+    // (di Pi default MATI, TTL auto-mati). Tanpa ini panel log selalu kosong.
+    LaunchedEffect(Unit) {
+        fetchState()
+        delay(1500)
+        // Bypass runToggleLogs() — itu fun lokal, gak bisa dipanggil dari sini.
+        DeviceRepository.toggleLogs(nodeId, true, LOG_TTL_SEC)
+            .onSuccess { logStreamOn = true }
+            .onFailure { lastErr = it.toUserMessage("Gagal menyalakan log stream.") }
+    }
 
     // Log streaming: begitu masuk layar, pastikan keran nyala. Kalau akun di-set
     // fresh, ttl-nya abis; toggle tombol log di bawah buat nyalain lagi.
@@ -391,18 +401,21 @@ fun DeviceControlScreen(onBack: () -> Unit, nodeId: String) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Log Perangkat", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
                     Switch(
-                        checked = logEnabled, onCheckedChange = { logEnabled = it },
+                        checked = logStreamOn, onCheckedChange = { on ->
+                            logEnabled = on
+                            runToggleLogs(on)
+                        },
                         colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = GreenPrimary)
                     )
-                    Text(if (logEnabled) "Hidup" else "Mati", fontSize = 12.sp, color = TextSecondary)
+                    Text(if (logStreamOn) "Hidup" else "Mati", fontSize = 12.sp, color = TextSecondary)
                 }
 
-                if (logEnabled) {
-                    // tombol log-stream + ikuti auto-scroll
+                if (logStreamOn) {
+                    // status + tombol streaming + ikuti auto-scroll
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (logStreamOn) {
-                            Text("Log aktif (TTL $LOG_TTL_SEC s)", fontSize = 12.sp, color = StatusNormal)
-                        }
+                        Text("Log aktif (TTL $LOG_TTL_SEC s)", fontSize = 12.sp, color = StatusNormal)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { runToggleLogs(!logStreamOn) }) {
                             Text(if (logStreamOn) "Matikan Streaming" else "Nyalakan Streaming", fontSize = 12.sp, color = GreenPrimary)
                         }
